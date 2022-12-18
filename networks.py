@@ -1,4 +1,5 @@
 # Imports
+from typing import Tuple
 import torch
 from master_config import MasterConfig
 
@@ -123,9 +124,15 @@ class Mnet(NetworkBase):
 
     def __init__(self, config: MasterConfig = None) -> None:
         super().__init__(config)
+        N_z = config.Z_SIZE
+        N_h = config.HX_SIZE
+        self.lstm = torch.nn.LSTMCell(N_z, N_h)
+        #TODO instantiate MDN
 
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        ...
+    def forward(self, z0: torch.Tensor,
+        h0: torch.Tensor, a0: torch.Tensor) -> Tuple[torch.Tensor]:
+        z1,h1 = None #TODO Implement forward method
+        return z1, h1
 
 
 class Cnet(NetworkBase):
