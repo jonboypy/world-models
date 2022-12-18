@@ -6,4 +6,6 @@ RUN sudo apt update && sudo apt install xvfb -y
 
 RUN echo 'alias python="xvfb-run python"' >> /home/ray/.bashrc
 
-RUN echo 'export PS1="\[$(tput bold)\]\[\033[38;5;39m\]World-Models-Docker🐋\[$(tput sgr0)\]:\W\\$ \[$(tput sgr0)\]"' >> /home/ray/.bashrc
+RUN echo 'export PS1="\[$(tput bold)\]\[\033[38;5;6m\]World-Models-Docker🐋\[$(tput sgr0)\]:\W\\$ \[$(tput sgr0)\]"' >> /home/ray/.bashrc
+
+ENV PYTHONPATH="$PYTHONPATH:/world-models"
