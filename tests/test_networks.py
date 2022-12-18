@@ -38,10 +38,6 @@ class TestVnet(unittest.TestCase):
         self.assertTrue((y <= 1).all())
 
 
-
-
-
-
 class TestMnet(unittest.TestCase):
 
     def setUp(self) -> None:

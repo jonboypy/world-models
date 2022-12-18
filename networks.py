@@ -3,8 +3,6 @@ import torch
 from master_config import MasterConfig
 
 
-
-
 # Networks
 class NetworkBase(torch.nn.Module):
 
