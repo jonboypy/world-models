@@ -28,12 +28,12 @@ class FakeEnv(EnvironmentBase):
         super().__init__(config, plugins)
     
     @EnvironmentBase.hookable
-    def reset(self, *args, **kwargs) -> None:
-        return kwargs['test']
+    def reset(self, test) -> None:
+        return test
 
     @EnvironmentBase.hookable
-    def step(self, *args, **kwargs) -> None:
-        return kwargs['test']
+    def step(self, test) -> None:
+        return test
 
 
 # Tests
@@ -47,7 +47,7 @@ class TestPluginAPI(unittest.TestCase):
         self.assertEqual(self.env.reset(test=-1), 0)
 
     def test_post_hook(self) -> None:
-        self.assertEqual(self.env.step(), 0)
+        self.assertEqual(self.env.step(test=-1), 0)
 
 
 class TestMultiPluginAPI(unittest.TestCase):
