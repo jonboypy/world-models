@@ -9,7 +9,7 @@ class TestGymEnv(unittest.TestCase):
 
 
     def setUp(self) -> None:
-        MasterConfig.ENV_NAME = "LunarLander-v2"
+        MasterConfig.ENV_NAME = "CarRacing-v1"
         self.env = GymEnvironment(MasterConfig)
 
     def test_setup(self) -> None:
