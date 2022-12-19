@@ -41,7 +41,46 @@ class TestVnet(unittest.TestCase):
 class TestMnet(unittest.TestCase):
 
     def setUp(self) -> None:
+        MasterConfig.LSTM_CELL_ST = True
+        self.N_z = MasterConfig.Z_SIZE
+        self.N_h = MasterConfig.HX_SIZE
+        self.N_a = MasterConfig.ACTION_SPACE_SIZE
         self.net = Mnet(MasterConfig)
+
+    def test_LSTM(self) -> None:
+        z0 = torch.rand(1,self.N_z)
+        a0 = torch.rand(1,self.N_a)
+        h0 = torch.rand(1,self.N_h)
+        c0 = torch.rand(1,self.N_h)
+        za = torch.cat([z0,a0], -1)
+        h1, c1 = self.net.lstm(za,h0,c0)
+        self.assertEqual(h0.size(), h1.size())
+        self.assertEqual(c0.size(), c1.size())
+
+    def test_MDN(self) -> None:
+        z = torch.rand(1,self.N_z)
+        h = torch.rand(1,self.N_h)
+        c = torch.rand(1,self.N_h)
+        zh = torch.cat([z,h,c], -1)
+        mix = self.net.mdn(zh)
+        self.assertIsInstance(mix,
+            torch.distributions.MixtureSameFamily)
+        z_next = mix.sample(z.size()).flatten(1)
+        self.assertEqual(z.size(), z_next.size())
+
+    def test_full_network(self) -> None:
+        z0 = torch.rand(1,self.N_z)
+        a0 = torch.rand(1,self.N_a)
+        h0 = torch.rand(1,self.N_h)
+        c0 = torch.rand(1,self.N_h)
+        mix, h1, c1 = self.net(z0, h0, c0, a0)
+        self.assertEqual(h0.size(), h1.size())
+        self.assertEqual(c0.size(), c1.size())
+        self.assertIsInstance(mix,
+            torch.distributions.MixtureSameFamily)
+        z_next = mix.sample(z0.size()).flatten(1)
+        self.assertEqual(z0.size(), z_next.size())
+
 
 class TestCnet(unittest.TestCase):
 

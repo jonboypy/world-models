@@ -120,19 +120,79 @@ class Mnet(NetworkBase):
     """
     M 'memory' network as described in https://arxiv.org/pdf/1809.01999.pdf
     Is a mixed-density RNN architecture mapping: Z_t, h_t, a_t -> P(Z_{t+1})
+
+    Args:
+        config: MasterConfig object.
     """
 
     def __init__(self, config: MasterConfig = None) -> None:
         super().__init__(config)
-        N_z = config.Z_SIZE
-        N_h = config.HX_SIZE
-        self.lstm = torch.nn.LSTMCell(N_z, N_h)
-        #TODO instantiate MDN
+        self.LSTM_CELL_ST = self.config.LSTM_CELL_ST
+        self.lstm = self.LSTM(config)
+        self.mdn = self.MDN(config)
 
-    def forward(self, z0: torch.Tensor,
-        h0: torch.Tensor, a0: torch.Tensor) -> Tuple[torch.Tensor]:
-        z1,h1 = None #TODO Implement forward method
-        return z1, h1
+    def forward(self, z0: torch.Tensor, h0: torch.Tensor,
+        c0: torch.Tensor, a0: torch.Tensor) -> Tuple[
+            torch.distributions.MixtureSameFamily, torch.Tensor]:
+        za = torch.cat([z0, a0], -1)
+        h1, c1 = self.lstm(za, h0, c0)
+        if self.LSTM_CELL_ST:
+            h = torch.cat([z0,h1,c1], -1)
+        else:
+            h = torch.cat([z0,h1], -1)
+        z_mixture = self.mdn(h)
+        return z_mixture, h1, c1
+
+
+    class LSTM(NetworkBase):
+        """
+        Long-Short-Term-Memory Network.
+
+        Args:
+            config: MasterConfig object.
+        """
+
+        def __init__(self, config: MasterConfig = None) -> None:
+            super().__init__(config)
+            self.N_z = config.Z_SIZE
+            self.N_h = config.HX_SIZE
+            self.N_a = config.ACTION_SPACE_SIZE
+            self.cell = torch.nn.LSTMCell(
+                self.N_z+self.N_a, self.N_h)
+        
+        def forward(self, x: torch.Tensor,
+            hx: torch.Tensor, cx: torch.Tensor) -> Tuple[torch.Tensor]:
+            return self.cell(x,(hx,cx))
+
+    class MDN(NetworkBase):
+        """
+        Mixture Density Network. Outputs a mixture of
+        Gaussian distributions.
+
+        Args:
+            config: MasterConfig object.
+        """
+
+        def __init__(self, config: MasterConfig = None) -> None:
+            super().__init__(config)
+            N_z = config.Z_SIZE
+            N_h = config.HX_SIZE
+            N_GAUSSIANS = config.N_GAUSSIANS
+            C = 2 if config.LSTM_CELL_ST else 1
+            self.pi = torch.nn.Linear(N_z+C*N_h, N_GAUSSIANS)
+            self.pi_softmax = torch.nn.Softmax(-1)
+            self.mu = torch.nn.Linear(N_z+C*N_h, N_GAUSSIANS)
+            self.sigma = torch.nn.Linear(N_z+C*N_h, N_GAUSSIANS)
+
+        def forward(self, x: torch.Tensor) -> torch.Tensor:
+            pi = self.pi(x)
+            pi = self.pi_softmax(pi)
+            pi = torch.distributions.Categorical(pi)
+            mu = self.mu(x)
+            sigma = torch.exp(self.sigma(x))
+            gaussians = torch.distributions.Normal(mu, sigma)
+            mixture = torch.distributions.MixtureSameFamily(pi, gaussians)
+            return mixture
 
 
 class Cnet(NetworkBase):
