@@ -86,4 +86,13 @@ class TestCnet(unittest.TestCase):
 
     def setUp(self) -> None:
         self.net = Cnet(MasterConfig)
+        self.N_z = MasterConfig.Z_SIZE
+        self.N_h = MasterConfig.HX_SIZE
+
+    def test_forward(self) -> None:
+        x = torch.rand(1, self.N_z + self.N_h)
+        y = self.net(x)
+        self.assertEqual(y.size(-1), 3)
+        self.assertTrue((y >= -1.).all())
+        self.assertTrue((y <= 1.).all())
 

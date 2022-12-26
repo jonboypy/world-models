@@ -1,12 +1,15 @@
 # Imports
 import functools
 from abc import ABC, abstractmethod
-from typing import List
+from typing import List, NewType
 import gym
 import numpy as np
 from plugins import PluginBase
 from master_config import MasterConfig
 
+
+# Type
+Environment = NewType('Environment', object)
 
 # Environments
 class EnvironmentBase(ABC):
@@ -24,31 +27,6 @@ class EnvironmentBase(ABC):
     def step(self, *args, **kwargs) -> None:
         raise NotImplementedError()
 
-    @staticmethod 
-    def hookable(func):
-        @functools.wraps(func)
-        def hooked(self, *args, **kwargs):
-            func_name = func.__name__
-            if self.plugins:
-                for plugin in self.plugins:
-                    if hasattr(plugin,
-                    f'pre_{func_name}'):
-                        hook = getattr(
-                            plugin, f'pre_{func_name}')
-                        prehook_return = hook(*args, **kwargs)
-                        if prehook_return:
-                            kwargs = prehook_return
-                output = func(
-                    self, *args, **kwargs)
-                for plugin in self.plugins:
-                    if hasattr(
-                        plugin, f'post_{func_name}'):
-                        hook = getattr(plugin, f'post_{func_name}')
-                        output = hook(output)
-            else: output = func(self, *args, **kwargs)
-            return output
-        return hooked
-
 
 class GymEnvironment(EnvironmentBase):
 
@@ -58,7 +36,7 @@ class GymEnvironment(EnvironmentBase):
         self.gym = gym.make(config.ENV_NAME)
         self.reset()
 
-    @EnvironmentBase.hookable
+    @PluginBase.hookable
     def reset(self) -> np.ndarray:
         """
         Resets environment to start a new episode.
@@ -69,7 +47,7 @@ class GymEnvironment(EnvironmentBase):
         return self.gym.reset()
 
 
-    @EnvironmentBase.hookable
+    @PluginBase.hookable
     def step(self, action: np.ndarray) -> np.ndarray:
         """
         Takes a step in the environment.

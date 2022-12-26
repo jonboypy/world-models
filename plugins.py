@@ -1,5 +1,6 @@
 # Imports
-from abc import ABC, abstractmethod
+import functools
+from abc import ABC
 from typing import Union, Dict, Any
 
 
@@ -31,7 +32,30 @@ class PluginBase(ABC):
         """
         raise NotImplementedError()
 
-
+    @staticmethod 
+    def hookable(func):
+        @functools.wraps(func)
+        def hooked(self, *args, **kwargs):
+            func_name = func.__name__
+            if self.plugins:
+                for plugin in self.plugins:
+                    if hasattr(plugin,
+                    f'pre_{func_name}'):
+                        hook = getattr(
+                            plugin, f'pre_{func_name}')
+                        prehook_return = hook(*args, **kwargs)
+                        if prehook_return:
+                            kwargs = prehook_return
+                output = func(
+                    self, *args, **kwargs)
+                for plugin in self.plugins:
+                    if hasattr(
+                        plugin, f'post_{func_name}'):
+                        hook = getattr(plugin, f'post_{func_name}')
+                        output = hook(output)
+            else: output = func(self, *args, **kwargs)
+            return output
+        return hooked
 
 
 class EnvironmentPlugin(PluginBase):

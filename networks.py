@@ -164,6 +164,7 @@ class Mnet(NetworkBase):
             hx: torch.Tensor, cx: torch.Tensor) -> Tuple[torch.Tensor]:
             return self.cell(x,(hx,cx))
 
+
     class MDN(NetworkBase):
         """
         Mixture Density Network. Outputs a mixture of
@@ -198,12 +199,18 @@ class Mnet(NetworkBase):
 class Cnet(NetworkBase):
     """
     C 'controller' network as described in https://arxiv.org/pdf/1809.01999.pdf
-    Is a simple fully-connected network mapping: (Z_t, P(Z_{t+1})) -> a_{t+1}
+    Is a simple fully-connected network mapping: (Z_t, H_t) -> a_{t+1}
     """
 
     def __init__(self, config: MasterConfig = None) -> None:
         super().__init__(config)
+        self.N_z = config.Z_SIZE
+        self.N_h = config.HX_SIZE
+        self.l1 = torch.nn.Linear(self.N_z + self.N_h, 3)
+        self.sigmoid1 = torch.nn.Sigmoid()
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        ...
+        x = self.l1(x)
+        y = self.sigmoid1(x)
+        return y
 

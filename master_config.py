@@ -1,6 +1,9 @@
 
 class MasterConfig:
 
+    # (str) Name of environment (supported: "CarRacing-v1")
+    ENV_NAME = "CarRacing-v1"
+
     # (int) The size of the latent vector Z
     Z_SIZE = 32
 
