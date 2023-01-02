@@ -2,14 +2,15 @@
 import unittest
 from agents import RandomGymAgent
 from environments import GymEnvironment
-from master_config import MasterConfig
+from utils import MasterConfig
 
 
 
 class TestRandomGymAgent(unittest.TestCase):
 
     def setUp(self) -> None:
-        env = GymEnvironment(MasterConfig)
+        self.config = MasterConfig.from_yaml('./config.yml')
+        env = GymEnvironment(self.config)
         self.agent = RandomGymAgent(env)
 
     def test_act(self) -> None:

@@ -1,7 +1,7 @@
 # Imports
 import unittest
 from environments import GymEnvironment
-from master_config import MasterConfig
+from utils import MasterConfig
 
 
 # Tests
@@ -9,8 +9,9 @@ class TestGymEnv(unittest.TestCase):
 
 
     def setUp(self) -> None:
-        MasterConfig.ENV_NAME = "CarRacing-v1"
-        self.env = GymEnvironment(MasterConfig)
+        self.config = MasterConfig.from_yaml('./config.yml')
+        self.config.ENV_NAME = "CarRacing-v1"
+        self.env = GymEnvironment(self.config)
 
     def test_setup(self) -> None:
         self.assertTrue(hasattr(self.env, 'gym'))

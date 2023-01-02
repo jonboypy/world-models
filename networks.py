@@ -1,11 +1,11 @@
 # Imports
 from typing import Tuple
 import torch
-from master_config import MasterConfig
+from utils import MasterConfig
 
 
 # Networks
-class NetworkBase(torch.nn.Module):
+class Network(torch.nn.Module):
 
     """
     Base class which all other networks derived from.
@@ -19,7 +19,7 @@ class NetworkBase(torch.nn.Module):
         self.config = config
 
 
-class Vnet(NetworkBase):
+class Vnet(Network):
 
     """
     V 'vision' network as described in https://arxiv.org/pdf/1809.01999.pdf
@@ -40,7 +40,7 @@ class Vnet(NetworkBase):
         return y, z
 
 
-    class Encoder(NetworkBase):
+    class Encoder(Network):
         """
         Encoder for V network. Maps: Image -> Z_t
 
@@ -81,7 +81,7 @@ class Vnet(NetworkBase):
             return z
 
 
-    class Decoder(NetworkBase):
+    class Decoder(Network):
         """
         Decoder for V network. Maps: Z_t -> Image
 
@@ -116,7 +116,7 @@ class Vnet(NetworkBase):
             return y
 
 
-class Mnet(NetworkBase):
+class Mnet(Network):
     """
     M 'memory' network as described in https://arxiv.org/pdf/1809.01999.pdf
     Is a mixed-density RNN architecture mapping: Z_t, h_t, a_t -> P(Z_{t+1})
@@ -144,7 +144,7 @@ class Mnet(NetworkBase):
         return z_mixture, h1, c1
 
 
-    class LSTM(NetworkBase):
+    class LSTM(Network):
         """
         Long-Short-Term-Memory Network.
 
@@ -165,7 +165,7 @@ class Mnet(NetworkBase):
             return self.cell(x,(hx,cx))
 
 
-    class MDN(NetworkBase):
+    class MDN(Network):
         """
         Mixture Density Network. Outputs a mixture of
         Gaussian distributions.
@@ -196,7 +196,7 @@ class Mnet(NetworkBase):
             return mixture
 
 
-class Cnet(NetworkBase):
+class Cnet(Network):
     """
     C 'controller' network as described in https://arxiv.org/pdf/1809.01999.pdf
     Is a simple fully-connected network mapping: (Z_t, H_t) -> a_{t+1}

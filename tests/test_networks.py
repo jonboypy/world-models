@@ -2,24 +2,25 @@
 import unittest
 import torch
 from networks import Vnet, Mnet, Cnet
-from master_config import MasterConfig
+from utils import MasterConfig
 
 
 # Tests
 class TestVnet(unittest.TestCase):
 
     def setUp(self) -> None:
-        self.net = Vnet(MasterConfig)
+        self.config = MasterConfig.from_yaml('./config.yml')
+        self.net = Vnet(self.config)
 
     def test_encoder_network(self) -> None:
-        N_z = MasterConfig.Z_SIZE
+        N_z = self.config.Z_SIZE
         x = torch.rand(1,3,64,64)
         z = self.net.encoder(x)
         self.assertEqual(z.size(),
             torch.Size([1,N_z]))
 
     def test_decoder_network(self) -> None:
-        N_z = MasterConfig.Z_SIZE
+        N_z = self.config.Z_SIZE
         z = torch.rand(1,N_z)
         y = self.net.decoder(z)
         self.assertEqual(y.size(),
@@ -28,7 +29,7 @@ class TestVnet(unittest.TestCase):
         self.assertTrue((y <= 1).all())
 
     def test_full_network(self) -> None:
-        N_z = MasterConfig.Z_SIZE
+        N_z = self.config.Z_SIZE
         x = torch.rand(1,3,64,64)
         y, z = self.net(x)
         self.assertEqual(z.size(),
@@ -41,11 +42,12 @@ class TestVnet(unittest.TestCase):
 class TestMnet(unittest.TestCase):
 
     def setUp(self) -> None:
-        MasterConfig.LSTM_CELL_ST = True
-        self.N_z = MasterConfig.Z_SIZE
-        self.N_h = MasterConfig.HX_SIZE
-        self.N_a = MasterConfig.ACTION_SPACE_SIZE
-        self.net = Mnet(MasterConfig)
+        config = MasterConfig.from_yaml('./config.yml')
+        config.LSTM_CELL_ST = True
+        self.N_z = config.Z_SIZE
+        self.N_h = config.HX_SIZE
+        self.N_a = config.ACTION_SPACE_SIZE
+        self.net = Mnet(config)
 
     def test_LSTM(self) -> None:
         z0 = torch.rand(1,self.N_z)
@@ -85,9 +87,10 @@ class TestMnet(unittest.TestCase):
 class TestCnet(unittest.TestCase):
 
     def setUp(self) -> None:
-        self.net = Cnet(MasterConfig)
-        self.N_z = MasterConfig.Z_SIZE
-        self.N_h = MasterConfig.HX_SIZE
+        self.config = MasterConfig.from_yaml('./config.yml')
+        self.net = Cnet(self.config)
+        self.N_z = self.config.Z_SIZE
+        self.N_h = self.config.HX_SIZE
 
     def test_forward(self) -> None:
         x = torch.rand(1, self.N_z + self.N_h)

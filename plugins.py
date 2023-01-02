@@ -4,7 +4,11 @@ from abc import ABC
 from typing import Union, Dict, Any
 
 
-class PluginBase(ABC):
+class Plugin(ABC):
+    """
+    Abstract base class which all plugins derive from.
+
+    """
 
     def __init__(self):
         super().__init__()
@@ -58,17 +62,26 @@ class PluginBase(ABC):
         return hooked
 
 
-class EnvironmentPlugin(PluginBase):
+class EnvDataRecorder(Plugin):
 
+    """
+    Saves environment data to files.
+    """
 
     def __init__(self) -> None:
         super().__init__()
+        self.eps = 0
+        self.step = 0
+        self.eps_data = {}
 
-    
-    def pre_reset(self):
-        print('calling from plugin pre hook!')
+    def post_step(self, output: Any) -> Any:
+        self.eps_data[self.step] = output
+        self.step += 1
+        return output
 
-    def post_reset(self):
-        print('calling from plugin pre hook!')
-
-
+    def post_reset(self, output: Any) -> Any:
+        self._save_episode_data()
+        self.eps += 1
+        self.eps_data = {}
+        self.step = 0
+        return output

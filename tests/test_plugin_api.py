@@ -1,13 +1,13 @@
 # Imports
 import unittest
 from typing import List, Union, Dict, Any
-from master_config import MasterConfig
-from environments import EnvironmentBase
-from plugins import PluginBase
+from utils import MasterConfig
+from environments import Environment
+from plugins import Plugin
 
 
 # Helpers
-class FakeEnvPlugin(PluginBase):
+class FakeEnvPlugin(Plugin):
 
     def __init__(self):
         super().__init__()
@@ -21,17 +21,17 @@ class FakeEnvPlugin(PluginBase):
         output += 1
         return output
 
-class FakeEnv(EnvironmentBase):
+class FakeEnv(Environment):
 
     def __init__(self, config: MasterConfig = None, 
-            plugins: List[PluginBase] = None) -> None:
+            plugins: List[Plugin] = None) -> None:
         super().__init__(config, plugins)
     
-    @EnvironmentBase.hookable
+    @Plugin.hookable
     def reset(self, test) -> None:
         return test
 
-    @EnvironmentBase.hookable
+    @Plugin.hookable
     def step(self, test) -> None:
         return test
 

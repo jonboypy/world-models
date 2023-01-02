@@ -5,28 +5,15 @@ import numpy as np
 from environments import Environment
 
 
-class AgentBase(ABC):
+class Agent(ABC):
 
     def __init__(self, env: Environment) -> None:
         super().__init__()
         self.env = env
         self.eps_cum_reward = 0.
+        self.avg_cum_reward = 0.
         self.state = self.env.reset()
-    
-    @abstractmethod
-    def policy(self, state: np.ndarray) -> np.ndarray:
-        raise NotImplementedError()
-
-
-class RandomGymAgent(AgentBase):
-
-    def __init__(self, env: Environment) -> None:
-        super().__init__(env)
-
-    def policy(self, state: np.ndarray) -> np.ndarray:
-        action = self.env.gym.action_space.sample()
-        return action
-
+ 
     def act(self) -> Tuple[np.ndarray]:
         action = self.policy(self.state)
         obs, reward, done, _ = self.env.step(action)
@@ -34,7 +21,20 @@ class RandomGymAgent(AgentBase):
         self.eps_cum_reward += reward
         if done:
             self.state = self.env.reset()
+            self.avg_cum_reward = (self.avg_cum_reward +
+                                    self.eps_cum_reward) / 2
             self.eps_cum_reward = 0.
-        
+      
+    @abstractmethod
+    def policy(self, state: np.ndarray) -> np.ndarray:
+        raise NotImplementedError()
 
 
+class RandomGymAgent(Agent):
+
+    def __init__(self, env: Environment) -> None:
+        super().__init__(env)
+
+    def policy(self, state: np.ndarray) -> np.ndarray:
+        action = self.env.gym.action_space.sample()
+        return action
