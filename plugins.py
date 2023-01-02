@@ -1,6 +1,8 @@
 # Imports
+from pathlib import Path
 import functools
 from abc import ABC
+from PIL import Image
 from typing import Union, Dict, Any
 
 
@@ -68,11 +70,16 @@ class EnvDataRecorder(Plugin):
     Saves environment data to files.
     """
 
-    def __init__(self) -> None:
+    def __init__(self, save_dir: Path) -> None:
         super().__init__()
-        self.eps = 0
+        self.save_dir = save_dir
+        self.eps = -2
         self.step = 0
         self.eps_data = {}
+
+    def __del__(self) -> None:
+        if self.eps_data:
+            self._save_episode_data()
 
     def post_step(self, output: Any) -> Any:
         self.eps_data[self.step] = output
@@ -80,8 +87,19 @@ class EnvDataRecorder(Plugin):
         return output
 
     def post_reset(self, output: Any) -> Any:
-        self._save_episode_data()
+        if not self.eps < 0: self._save_episode_data()
         self.eps += 1
         self.eps_data = {}
         self.step = 0
         return output
+
+    def _save_episode_data(self) -> None:
+        (self.save_dir / f'episode-{self.eps}').mkdir(
+                            parents=True, exist_ok=True)
+        eps_dir = self.save_dir / f'episode-{self.eps}'
+        for step, data in self.eps_data.items():
+            img, _, _, _ = data
+            img = Image.fromarray(img)
+            #img = self._preprocess(img)
+            img.save(eps_dir / f'step-{step}.png')
+            

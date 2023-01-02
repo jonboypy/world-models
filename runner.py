@@ -1,8 +1,11 @@
 # Imports
 from abc import ABC
+import argparse
+from pathlib import Path
 from utils import MasterConfig
 from environments import GymEnvironment
 from plugins import EnvDataRecorder
+from agents import RandomGymAgent
 
 
 class Runner(ABC):
@@ -14,19 +17,32 @@ class Runner(ABC):
 
 class DataCollector(Runner):
 
-    def __init__(self, config: MasterConfig) -> None:
+    def __init__(self, config: MasterConfig, steps: int) -> None:
         super().__init__(config)
-        data_recorder = EnvDataRecorder()
+        data_dir = Path('./data')
+        data_recorder = EnvDataRecorder(data_dir)
         plugins = [data_recorder]
         self.env = GymEnvironment(config, plugins)
+        self.agent = RandomGymAgent(self.env)
+        self.steps = steps
 
-    def collect(self) -> None:
-        ...
+    def execute(self) -> None:
+        for _ in range(self.steps):
+            self.agent.act()
 
 
+def main() -> None:
+    config = MasterConfig.from_yaml(args.config)
+    runner = DataCollector(config, steps=int(1e5))
+    runner.execute()
 
 
+# CLI
+parser = argparse.ArgumentParser(description='Main interface to project.')
+parser.add_argument('--config', help='Path to .yaml configuration file.', default='./config.yml')
+args = parser.parse_args()
 
 if __name__ == '__main__':
-    runner = DataCollector()
+    main()
+
 
