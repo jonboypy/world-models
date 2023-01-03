@@ -4,7 +4,7 @@ import argparse
 from pathlib import Path
 from utils import MasterConfig
 from environments import GymEnvironment
-from plugins import EnvDataRecorder
+from plugins import DataRecorder
 from agents import RandomGymAgent
 
 
@@ -20,10 +20,10 @@ class DataCollector(Runner):
     def __init__(self, config: MasterConfig, steps: int) -> None:
         super().__init__(config)
         data_dir = Path('./data')
-        data_recorder = EnvDataRecorder(data_dir)
+        data_recorder = DataRecorder(data_dir)
         plugins = [data_recorder]
         self.env = GymEnvironment(config, plugins)
-        self.agent = RandomGymAgent(self.env)
+        self.agent = RandomGymAgent(self.env, plugins)
         self.steps = steps
 
     def execute(self) -> None:
@@ -33,7 +33,8 @@ class DataCollector(Runner):
 
 def main() -> None:
     config = MasterConfig.from_yaml(args.config)
-    runner = DataCollector(config, steps=int(1e5))
+    if config.PROCEDURE == 'data-collection':
+        runner = DataCollector(config, 2000)
     runner.execute()
 
 

@@ -1,9 +1,11 @@
 # Imports
 from pathlib import Path
+from typing import Union, Dict, Any, Tuple
+import shutil
 import functools
 from abc import ABC
 from PIL import Image
-from typing import Union, Dict, Any
+import numpy as np
 
 
 class Plugin(ABC):
@@ -58,22 +60,31 @@ class Plugin(ABC):
                     if hasattr(
                         plugin, f'post_{func_name}'):
                         hook = getattr(plugin, f'post_{func_name}')
+                        og_output = output
                         output = hook(output)
+                        if output is None: output = og_output
             else: output = func(self, *args, **kwargs)
             return output
         return hooked
 
 
-class EnvDataRecorder(Plugin):
+class DataRecorder(Plugin):
 
     """
-    Saves environment data to files.
+    Saves agent experiences to files.
+    This collects data to train the V and M networks.
+    Plugin must be given to both the environment and agent.
+    
+    Args:
+        save_dir: Path to directory to save data to.
     """
 
     def __init__(self, save_dir: Path) -> None:
         super().__init__()
         self.save_dir = save_dir
-        self.eps = -2
+        if save_dir.exists():
+            shutil.rmtree(save_dir)
+        self.eps = -1
         self.step = 0
         self.eps_data = {}
 
@@ -81,10 +92,16 @@ class EnvDataRecorder(Plugin):
         if self.eps_data:
             self._save_episode_data()
 
+    def pre_policy(self, state: np.ndarray):
+        self.eps_data[self.step] = state
+
+    def post_policy(self, output: Any) -> Any:
+        self.eps_data[self.step] = (
+            self.eps_data[self.step],
+                                output)
+
     def post_step(self, output: Any) -> Any:
-        self.eps_data[self.step] = output
         self.step += 1
-        return output
 
     def post_reset(self, output: Any) -> Any:
         if not self.eps < 0: self._save_episode_data()
@@ -97,9 +114,17 @@ class EnvDataRecorder(Plugin):
         (self.save_dir / f'episode-{self.eps}').mkdir(
                             parents=True, exist_ok=True)
         eps_dir = self.save_dir / f'episode-{self.eps}'
+        actions = []
         for step, data in self.eps_data.items():
-            img, _, _, _ = data
-            img = Image.fromarray(img)
-            #img = self._preprocess(img)
+            obs, action = data
+            actions.append(action)
+            img = self._preprocess(obs)
+            step = str(step).zfill(len(str(self.step)))
             img.save(eps_dir / f'step-{step}.png')
-            
+        actions = np.array(actions)
+        np.save(eps_dir / 'actions', actions)
+
+    def _preprocess(self, obs: np.ndarray) -> Image.Image:
+        img = Image.fromarray(obs)
+        img = img.resize((64,64))
+        return img
