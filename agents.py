@@ -1,15 +1,18 @@
 # Imports
-from typing import Tuple
+from typing import Tuple, List
 from abc import ABC, abstractmethod
 import numpy as np
 from environments import Environment
+from plugins import Plugin
 
 
 class Agent(ABC):
 
-    def __init__(self, env: Environment) -> None:
+    def __init__(self, env: Environment,
+        plugins: List[Plugin]) -> None:
         super().__init__()
         self.env = env
+        self.plugins = plugins
         self.eps_cum_reward = 0.
         self.avg_cum_reward = 0.
         self.state = self.env.reset()
@@ -32,9 +35,11 @@ class Agent(ABC):
 
 class RandomGymAgent(Agent):
 
-    def __init__(self, env: Environment) -> None:
-        super().__init__(env)
+    def __init__(self, env: Environment,
+            plugins: List[Plugin]) -> None:
+        super().__init__(env, plugins)
 
+    @Plugin.hookable
     def policy(self, state: np.ndarray) -> np.ndarray:
         action = self.env.gym.action_space.sample()
         return action
