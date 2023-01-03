@@ -45,7 +45,6 @@ class GymEnvironment(Environment):
             plugins: List[Plugin]=None) -> None:
         super().__init__(config, plugins)
         self.gym = gym.make(config.ENV_NAME)
-        self.reset()
 
     @Plugin.hookable
     def reset(self) -> np.ndarray:
