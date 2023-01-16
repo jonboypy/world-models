@@ -14,7 +14,7 @@ class Network(torch.nn.Module):
         config: A MasterConfig object.
     """
 
-    def __init__(self, config: MasterConfig=None) -> None:
+    def __init__(self, config: MasterConfig = None) -> None:
         super().__init__()
         self.config = config
 
@@ -24,7 +24,6 @@ class Vnet(Network):
     """
     V 'vision' network as described in https://arxiv.org/pdf/1809.01999.pdf
     Is a VAE architecture mapping: image -> Z_t -> reconstructed image
-    
     Args:
         config: MasterConfig object.
     """
@@ -39,7 +38,6 @@ class Vnet(Network):
         y = self.decoder(z.clone())
         return y, z
 
-
     class Encoder(Network):
         """
         Encoder for V network. Maps: Image -> Z_t
@@ -50,19 +48,19 @@ class Vnet(Network):
         def __init__(self, config: MasterConfig = None) -> None:
             super().__init__(config)
             N_z = config.Z_SIZE
-            self.conv1 = torch.nn.Conv2d(3,32,4,2)
+            self.conv1 = torch.nn.Conv2d(3, 32, 4, 2)
             self.relu1 = torch.nn.ReLU(True)
-            self.conv2 = torch.nn.Conv2d(32,64,4,2)
+            self.conv2 = torch.nn.Conv2d(32, 64, 4, 2)
             self.relu2 = torch.nn.ReLU(True)
-            self.conv3 = torch.nn.Conv2d(64,128,4,2)
+            self.conv3 = torch.nn.Conv2d(64, 128, 4, 2)
             self.relu3 = torch.nn.ReLU(True)
-            self.conv4 = torch.nn.Conv2d(128,256,4,2)
+            self.conv4 = torch.nn.Conv2d(128, 256, 4, 2)
             self.relu4 = torch.nn.ReLU(True)
             self.mu_flatten = torch.nn.Flatten()
-            self.fv2mu = torch.nn.Linear(1024, N_z) # fv = 'feature vector'
+            self.fv2mu = torch.nn.Linear(1024, N_z)  # fv = 'feature vector'
             self.sigma_flatten = torch.nn.Flatten()
             self.fv2sigma = torch.nn.Linear(1024, N_z)
-            self.gaussian = torch.distributions.Normal(0,1)
+            self.gaussian = torch.distributions.Normal(0, 1)
 
         def forward(self, x: torch.Tensor) -> torch.Tensor:
             x = self.conv1(x)
@@ -80,7 +78,6 @@ class Vnet(Network):
             z = mu + sigma * self.gaussian.sample(sigma.size())
             return z
 
-
     class Decoder(Network):
         """
         Decoder for V network. Maps: Z_t -> Image
@@ -92,14 +89,14 @@ class Vnet(Network):
             super().__init__(config)
             N_z = config.Z_SIZE
             self.linear1 = torch.nn.Linear(N_z, 1024)
-            self.unflatten = torch.nn.Unflatten(-1,(1024,1,1))
-            self.deconv1 = torch.nn.ConvTranspose2d(1024,128,5,2)
+            self.unflatten = torch.nn.Unflatten(-1, (1024, 1, 1))
+            self.deconv1 = torch.nn.ConvTranspose2d(1024, 128, 5, 2)
             self.relu1 = torch.nn.ReLU(True)
-            self.deconv2 = torch.nn.ConvTranspose2d(128,64,5,2)
+            self.deconv2 = torch.nn.ConvTranspose2d(128, 64, 5, 2)
             self.relu2 = torch.nn.ReLU(True)
-            self.deconv3 = torch.nn.ConvTranspose2d(64,32,6,2)
+            self.deconv3 = torch.nn.ConvTranspose2d(64, 32, 6, 2)
             self.relu3 = torch.nn.ReLU(True)
-            self.deconv4 = torch.nn.ConvTranspose2d(32,3,6,2)
+            self.deconv4 = torch.nn.ConvTranspose2d(32, 3, 6, 2)
             self.sigmoid1 = torch.nn.Sigmoid()
 
         def forward(self, x: torch.Tensor) -> torch.Tensor:
@@ -132,17 +129,16 @@ class Mnet(Network):
         self.mdn = self.MDN(config)
 
     def forward(self, z0: torch.Tensor, h0: torch.Tensor,
-        c0: torch.Tensor, a0: torch.Tensor) -> Tuple[
+                c0: torch.Tensor, a0: torch.Tensor) -> Tuple[
             torch.distributions.MixtureSameFamily, torch.Tensor]:
         za = torch.cat([z0, a0], -1)
         h1, c1 = self.lstm(za, h0, c0)
         if self.LSTM_CELL_ST:
-            h = torch.cat([z0,h1,c1], -1)
+            h = torch.cat([z0, h1, c1], -1)
         else:
-            h = torch.cat([z0,h1], -1)
+            h = torch.cat([z0, h1], -1)
         z_mixture = self.mdn(h)
         return z_mixture, h1, c1
-
 
     class LSTM(Network):
         """
@@ -159,11 +155,11 @@ class Mnet(Network):
             self.N_a = config.ACTION_SPACE_SIZE
             self.cell = torch.nn.LSTMCell(
                 self.N_z+self.N_a, self.N_h)
-        
-        def forward(self, x: torch.Tensor,
-            hx: torch.Tensor, cx: torch.Tensor) -> Tuple[torch.Tensor]:
-            return self.cell(x,(hx,cx))
 
+        def forward(self, x: torch.Tensor,
+                    hx: torch.Tensor,
+                    cx: torch.Tensor) -> Tuple[torch.Tensor]:
+            return self.cell(x, (hx, cx))
 
     class MDN(Network):
         """
@@ -213,4 +209,3 @@ class Cnet(Network):
         x = self.l1(x)
         y = self.sigmoid1(x)
         return y
-

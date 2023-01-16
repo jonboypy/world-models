@@ -1,6 +1,3 @@
-# Procedure to perform (choices: 'data-collection', ...)
-PROCEDURE: 'data-collection'
-
 # (str) Name of environment (supported: "CarRacing-v1")
 ENV_NAME: "CarRacing-v1"
 

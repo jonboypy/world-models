@@ -12,8 +12,9 @@ class FakeEnvPlugin(Plugin):
     def __init__(self):
         super().__init__()
 
-    def pre_reset(self, *args, **kwargs) -> \
-                Union[Dict[str, Any], None]:
+    def pre_reset(self,
+                  *args,
+                  **kwargs) -> Union[Dict[str, Any], None]:
         kwargs['test'] += 1
         return kwargs
 
@@ -21,12 +22,13 @@ class FakeEnvPlugin(Plugin):
         output += 1
         return output
 
+
 class FakeEnv(Environment):
 
-    def __init__(self, config: MasterConfig = None, 
-            plugins: List[Plugin] = None) -> None:
+    def __init__(self, config: MasterConfig = None,
+                 plugins: List[Plugin] = None) -> None:
         super().__init__(config, plugins)
-    
+
     @Plugin.hookable
     def reset(self, test) -> None:
         return test
@@ -61,4 +63,3 @@ class TestMultiPluginAPI(unittest.TestCase):
 
     def test_post_hook(self) -> None:
         self.assertEqual(self.env.step(test=-2), 0)
-

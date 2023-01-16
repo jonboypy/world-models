@@ -5,7 +5,6 @@ from environments import GymEnvironment
 from utils import MasterConfig
 
 
-
 class TestRandomGymAgent(unittest.TestCase):
 
     def setUp(self) -> None:

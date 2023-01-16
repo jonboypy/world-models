@@ -9,10 +9,10 @@ class dotdict(dict):
     __setattr__ = dict.__setitem__
     __delattr__ = dict.__delitem__
 
+
 class MasterConfig(dotdict):
 
     REQUIRED_ATTR = [
-        "PROCEDURE",
         "ENV_NAME",
         "Z_SIZE",
         "HX_SIZE",
@@ -35,8 +35,7 @@ class MasterConfig(dotdict):
             if not hasattr(self, attr):
                 raise ConfigurationError(
                     f"configuration must contain {attr}")
-        
+
 
 class ConfigurationError(Exception):
     pass
-

@@ -1,11 +1,10 @@
 # Imports
 from abc import ABC, abstractmethod
-from typing import List 
+from typing import List
 import gym
 import numpy as np
 from plugins import Plugin
 from utils import MasterConfig
-
 
 
 # Environments
@@ -18,11 +17,11 @@ class Environment(ABC):
         plugins: A list of plugins
     """
 
-    def __init__(self, config: MasterConfig=None,
-                plugins: List[Plugin]=None) -> None:
+    def __init__(self, config: MasterConfig = None,
+                 plugins: List[Plugin] = None) -> None:
         self.config = config
         self.plugins = plugins
-    
+
     @abstractmethod
     def reset(self, *args, **kwargs) -> None:
         raise NotImplementedError()
@@ -41,8 +40,8 @@ class GymEnvironment(Environment):
         plugins: A list of plugins
     """
 
-    def __init__(self, config: MasterConfig=None,
-            plugins: List[Plugin]=None) -> None:
+    def __init__(self, config: MasterConfig = None,
+                 plugins: List[Plugin] = None) -> None:
         super().__init__(config, plugins)
         self.gym = gym.make(config.ENV_NAME)
 
@@ -60,7 +59,7 @@ class GymEnvironment(Environment):
     def step(self, action: np.ndarray) -> np.ndarray:
         """
         Takes a step in the environment.
-        
+
         returns:
             The observation, reward, and
             done-boolean after taking step.
