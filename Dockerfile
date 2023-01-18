@@ -11,3 +11,6 @@ RUN echo 'export PS1="\[$(tput bold)\]\[\033[38;5;6m\]World-Models-Docker🐋\[$
 ENV PYTHONPATH="$PYTHONPATH:/world-models"
 
 RUN echo 'cat /world-models/assets/banner.txt' >> /home/ray/.bashrc
+
+# updates:
+RUN pip install flake8
