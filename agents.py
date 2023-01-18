@@ -7,9 +7,16 @@ from plugins import Plugin
 
 
 class Agent(ABC):
+    """
+    Abstract base class which all other agents derive from.
+
+    Args:
+        env: An instance of an environment.
+        plugins: A list of plugins. Defaults to None.
+    """
 
     def __init__(self, env: Environment,
-                 plugins: List[Plugin]) -> None:
+                 plugins: List[Plugin] = None) -> None:
         super().__init__()
         self.env = env
         self.plugins = plugins
@@ -34,9 +41,13 @@ class Agent(ABC):
 
 
 class RandomGymAgent(Agent):
+    """
+    An agent for Gym environments that
+    follows a random policy.
+    """
 
     def __init__(self, env: Environment,
-                 plugins: List[Plugin]) -> None:
+                 plugins: List[Plugin] = None) -> None:
         super().__init__(env, plugins)
 
     @Plugin.hookable

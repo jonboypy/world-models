@@ -29,6 +29,9 @@ class TrainingModule(pl.LightningModule):
 
 
 class VnetTrainingModule(TrainingModule):
+    """
+    Training module for training the V-network (VAE).
+    """
 
     def __init__(self, config: MasterConfig) -> None:
         super().__init__(config)
@@ -48,7 +51,7 @@ class VnetTrainingModule(TrainingModule):
                       reconstructed: torch.Tensor,
                       latent: torch.Tensor) -> torch.Tensor:
         generative_loss = torch.nn.MSELoss()(reconstructed, original)
-        latent_loss = torch.nn.KLDivLoss(latent, torch.randn_like(latent))
+        latent_loss = torch.nn.KLDivLoss()(latent, torch.randn_like(latent))
         loss = generative_loss + latent_loss
         return loss
 

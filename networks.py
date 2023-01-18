@@ -24,8 +24,6 @@ class Vnet(Network):
     """
     V 'vision' network as described in https://arxiv.org/pdf/1809.01999.pdf
     Is a VAE architecture mapping: image -> Z_t -> reconstructed image
-    Args:
-        config: MasterConfig object.
     """
 
     def __init__(self, config: MasterConfig) -> None:
@@ -41,9 +39,6 @@ class Vnet(Network):
     class Encoder(Network):
         """
         Encoder for V network. Maps: Image -> Z_t
-
-        Args:
-            config: MasterConfig object.
         """
         def __init__(self, config: MasterConfig = None) -> None:
             super().__init__(config)
@@ -81,9 +76,6 @@ class Vnet(Network):
     class Decoder(Network):
         """
         Decoder for V network. Maps: Z_t -> Image
-
-        Args:
-            config: MasterConfig object.
         """
         def __init__(self, config: MasterConfig = None) -> None:
             super().__init__(config)
@@ -117,9 +109,6 @@ class Mnet(Network):
     """
     M 'memory' network as described in https://arxiv.org/pdf/1809.01999.pdf
     Is a mixed-density RNN architecture mapping: Z_t, h_t, a_t -> P(Z_{t+1})
-
-    Args:
-        config: MasterConfig object.
     """
 
     def __init__(self, config: MasterConfig = None) -> None:
@@ -143,9 +132,6 @@ class Mnet(Network):
     class LSTM(Network):
         """
         Long-Short-Term-Memory Network.
-
-        Args:
-            config: MasterConfig object.
         """
 
         def __init__(self, config: MasterConfig = None) -> None:
@@ -165,9 +151,6 @@ class Mnet(Network):
         """
         Mixture Density Network. Outputs a mixture of
         Gaussian distributions.
-
-        Args:
-            config: MasterConfig object.
         """
 
         def __init__(self, config: MasterConfig = None) -> None:

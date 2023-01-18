@@ -11,7 +11,6 @@ import numpy as np
 class Plugin(ABC):
     """
     Abstract base class which all plugins derive from.
-
     """
 
     def __init__(self):

@@ -34,10 +34,6 @@ class Environment(ABC):
 class GymEnvironment(Environment):
     """
     Wrapper around OpenAI's Gym environments.
-
-    Args:
-        config: a master config object.
-        plugins: A list of plugins
     """
 
     def __init__(self, config: MasterConfig = None,

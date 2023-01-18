@@ -15,6 +15,6 @@ class TestVnetTrainingModule(unittest.TestCase):
     def test_loss_function(self) -> None:
         func = self.train_module.loss_function
         img = torch.rand(1, 3, 64, 64)
-        latent = torch.randn_like(1, self.config.Z_SIZE)
+        latent = torch.randn(1, self.config.Z_SIZE)
         loss = func(img, img, latent)
-        self.assertEquals(loss, 0.0)
+        self.assertAlmostEquals(loss.item(), 0.0, 1)
