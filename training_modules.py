@@ -35,18 +35,22 @@ class VnetTrainingModule(TrainingModule):
         self.net = Vnet(config)
 
     def training_step(self, image: torch.Tensor) -> torch.Tensor:
-        recon_image, _ = self.net(image)
-        loss = self.loss_function(image, recon_image)
+        reconstructed, latent = self.net(image)
+        loss = self.loss_function(image, reconstructed, latent)
         return loss
 
     def validation_step(self, image: torch.Tensor) -> torch.Tensor:
-        reconstructed, _ = self.net(image)
-        loss = self.loss_function(image, reconstructed)
+        reconstructed, latent = self.net(image)
+        loss = self.loss_function(image, reconstructed, latent)
         return loss
 
     def loss_function(self, original: torch.Tensor,
-                      reconstructed: torch.Tensor) -> torch.Tensor:
-        ...
+                      reconstructed: torch.Tensor,
+                      latent: torch.Tensor) -> torch.Tensor:
+        generative_loss = torch.nn.MSELoss()(reconstructed, original)
+        latent_loss = torch.nn.KLDivLoss(latent, torch.randn_like(latent))
+        loss = generative_loss + latent_loss
+        return loss
 
 
 class MnetTrainingModule(TrainingModule):
