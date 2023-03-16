@@ -1,4 +1,4 @@
-FROM rayproject/ray-ml:2.1.0-py37-gpu
+FROM rayproject/ray-ml:2.2.0-py310-gpu
 
 RUN conda install swig -y && pip install box2d-py
 
@@ -14,3 +14,5 @@ RUN echo 'cat /world-models/assets/banner.txt' >> /home/ray/.bashrc
 
 # updates:
 RUN pip install flake8
+
+RUN chmod 777 /home/ray
