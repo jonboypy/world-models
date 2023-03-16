@@ -63,6 +63,13 @@ class MnetTrainingModule(TrainingModule):
         self.net = Mnet(config)
 
 
+    def loss_function(self,
+            mixture: torch.distribution.Distribution,
+            true_z1: torch.Tensor) -> torch.Tensor:
+        # negative log probability
+        return -mixture.log_prob(true_z1)
+
+
 class CnetTrainingModule(TrainingModule):
 
     def __init__(self, config: MasterConfig) -> None:
