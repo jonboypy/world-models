@@ -71,7 +71,7 @@ class TestMnet(unittest.TestCase):
         self.assertIsInstance(
             mix,
             torch.distributions.MixtureSameFamily)
-        z_next = mix.sample(z.size()).flatten(1)
+        z_next = mix.sample()
         self.assertEqual(z.size(), z_next.size())
 
     def test_full_network(self) -> None:
@@ -85,7 +85,7 @@ class TestMnet(unittest.TestCase):
         self.assertIsInstance(
             mix,
             torch.distributions.MixtureSameFamily)
-        z_next = mix.sample(z0.size()).flatten(1)
+        z_next = mix.sample()
         self.assertEqual(z0.size(), z_next.size())
 
 
