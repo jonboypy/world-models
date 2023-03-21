@@ -46,28 +46,22 @@ class TestMnet(unittest.TestCase):
 
     def setUp(self) -> None:
         config = MasterConfig.from_yaml('./config.yml')
-        config.LSTM_CELL_ST = True
         self.N_z = config.Z_SIZE
         self.N_h = config.HX_SIZE
         self.N_a = config.ACTION_SPACE_SIZE
         self.net = Mnet(config)
 
     def test_LSTM(self) -> None:
-        z0 = torch.rand(1, self.N_z)
-        a0 = torch.rand(1, self.N_a)
-        h0 = torch.rand(1, self.N_h)
-        c0 = torch.rand(1, self.N_h)
-        za = torch.cat([z0, a0], -1)
-        h1, c1 = self.net.lstm(za, h0, c0)
-        self.assertEqual(h0.size(), h1.size())
-        self.assertEqual(c0.size(), c1.size())
+        z_prev = torch.rand(1, 1, self.N_z)
+        a_prev = torch.rand(1, 1, self.N_a)
+        za = torch.cat([z_prev, a_prev], -1)
+        h_next, _ = self.net.lstm(za)
+        self.assertEqual(h_next.size(-1), self.N_h)
 
     def test_MDN(self) -> None:
-        z = torch.rand(1, self.N_z)
-        h = torch.rand(1, self.N_h)
-        c = torch.rand(1, self.N_h)
-        zh = torch.cat([z, h, c], -1)
-        mix = self.net.mdn(zh)
+        z = torch.rand(1, 1, self.N_z)
+        h = torch.rand(1, 1, self.N_h)
+        mix = self.net.mdn(h)
         self.assertIsInstance(
             mix,
             torch.distributions.MixtureSameFamily)
@@ -75,18 +69,16 @@ class TestMnet(unittest.TestCase):
         self.assertEqual(z.size(), z_next.size())
 
     def test_full_network(self) -> None:
-        z0 = torch.rand(1, self.N_z)
-        a0 = torch.rand(1, self.N_a)
-        h0 = torch.rand(1, self.N_h)
-        c0 = torch.rand(1, self.N_h)
-        mix, h1, c1 = self.net(z0, h0, c0, a0)
-        self.assertEqual(h0.size(), h1.size())
-        self.assertEqual(c0.size(), c1.size())
+        # dims: (S,B,Z), (S,B,A)
+        z_prev = torch.rand(1, 1, self.N_z)
+        a_prev = torch.rand(1, 1, self.N_a)
+        z_next_est_dist, h_next = self.net(z_prev, a_prev)
         self.assertIsInstance(
-            mix,
+            z_next_est_dist,
             torch.distributions.MixtureSameFamily)
-        z_next = mix.sample()
-        self.assertEqual(z0.size(), z_next.size())
+        z_next = z_next_est_dist.sample()
+        self.assertEqual(z_prev.size(), z_next.size())
+        self.assertEqual(h_next.size(-1), self.N_h)
 
 
 class TestCnet(unittest.TestCase):

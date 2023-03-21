@@ -119,33 +119,24 @@ class Mnet(Network):
 
     def __init__(self, config: MasterConfig = None) -> None:
         super().__init__(config)
-        # boolean determining if LSTM uses a cell state
-        self.LSTM_CELL_ST = self.config.LSTM_CELL_ST
         # Instantiate LSTM
         self.lstm = self.LSTM(config)
         # Instantiate MDN
         self.mdn = self.MDN(config)
 
-    def forward(self, z0: torch.Tensor, h0: torch.Tensor,
-                c0: torch.Tensor, a0: torch.Tensor) -> Tuple[
-            torch.distributions.MixtureSameFamily, torch.Tensor]:
-        # Concatenate the latent vector with the previous action
-        za = torch.cat([z0, a0], -1)
+    def forward(self, z_prev: torch.Tensor,
+                a_prev: torch.Tensor) -> Tuple[
+                torch.distributions.MixtureSameFamily, torch.Tensor]:
+        # Dims: (S,B,Z), (S,B,A)
+        # Concatenate the previous latent vector & previous action
+        za = torch.cat([z_prev, a_prev], -1)
         # Compute LSTM
-        h1, c1 = self.lstm(za, h0, c0)
-        # if LSTM uses a cell state, concatenate latent vector,
-        #   hidden vector, and cell state vector
-        if self.LSTM_CELL_ST:
-            h = torch.cat([z0, h1, c1], -1)
-        # else concatente the hidden vector
-        #   with the latent vector
-        else:
-            h = torch.cat([z0, h1], -1)
+        h_prev, _ = self.lstm(za)
         # Compute MDN
-        z_mixture = self.mdn(h)
-        # return mixture distribution of the next latent vector,
-        #   the new hidden vector, and the new cell state vector
-        return z_mixture, h1, c1
+        z_next_est_dist = self.mdn(h_prev)
+        # return mixture distribution of the
+        #   next latent vector and the new hidden vector
+        return z_next_est_dist, h_prev
 
     class LSTM(Network):
         """
@@ -155,20 +146,18 @@ class Mnet(Network):
         def __init__(self, config: MasterConfig = None) -> None:
             super().__init__(config)
             # Latent vector size
-            self.N_z = config.Z_SIZE
+            N_z = config.Z_SIZE
             # Hidden vector size
-            self.N_h = config.HX_SIZE
+            N_h = config.HX_SIZE
             # Action-space size
-            self.N_a = config.ACTION_SPACE_SIZE
-            # Create LSTM cell
-            self.cell = torch.nn.LSTMCell(
-                self.N_z+self.N_a, self.N_h)
+            N_a = config.ACTION_SPACE_SIZE
+            # Create LSTM
+            self.net = torch.nn.LSTM(N_z + N_a, N_h)
 
-        def forward(self, x: torch.Tensor,
-                    hx: torch.Tensor,
-                    cx: torch.Tensor) -> Tuple[torch.Tensor]:
+        def forward(self, x: torch.Tensor) -> Tuple[torch.Tensor]:
             # Compute LSTM & return output
-            return self.cell(x, (hx, cx))
+            #   Uses h0, c0 == 0
+            return self.net(x)
 
     class MDN(Network):
         """
@@ -184,17 +173,15 @@ class Mnet(Network):
             # Hidden vector size
             N_h = config.HX_SIZE
             # Number of Gaussians in mixture
-            N_GAUSSIANS = config.N_GAUSSIANS
-            # if LSTM is using hidden state AND cell state
-            C = 2 if config.LSTM_CELL_ST else 1
+            N_g = config.N_GAUSSIANS
             # Mixing coefficient for each Gaussian
-            self.pi = torch.nn.Linear(N_z + N_h * C, N_GAUSSIANS)
+            self.pi = torch.nn.Linear(N_h, N_g)
             # Softmax for pi output so they add to 1
             self.pi_softmax = torch.nn.Softmax(-1)
             # Mean vectors for each Gaussian
-            self.mu = torch.nn.Linear(N_z + N_h * C, N_GAUSSIANS * N_z)
+            self.mu = torch.nn.Linear(N_h, N_g * N_z)
             # Covariance matrix diagonal for each Gaussian
-            self.sigma = torch.nn.Linear(N_z + N_h * C, N_GAUSSIANS * N_z)
+            self.sigma = torch.nn.Linear(N_h, N_g * N_z)
 
         def forward(self, x: torch.Tensor) -> torch.Tensor:
             # Calculate mixing coefficients for each Gaussian
@@ -205,9 +192,9 @@ class Mnet(Network):
             mu = self.mu(x)
             # Calculate variance vectors for each Gaussian
             sigma = torch.exp(self.sigma(x)) # exp to keep it positive
-            # Reshape to (Batch, N Gaussians, N_z)
-            mu = mu.view(pi.size(0), pi.size(-1), -1)
-            sigma = sigma.view(pi.size(0), pi.size(-1), -1)
+            # Reshape to (Seq, Batch, N Gaussians, N_z)
+            mu = mu.view(*pi.size(), -1)
+            sigma = sigma.view(*pi.size(), -1)
             # Create a categorical distribution with pi
             pi = torch.distributions.Categorical(pi)
             # Create independent multivariate Gaussian distribution
@@ -226,11 +213,13 @@ class Cnet(Network):
     def __init__(self, config: MasterConfig = None) -> None:
         super().__init__(config)
         # Latent vector size
-        self.N_z = config.Z_SIZE
+        N_z = config.Z_SIZE
         # Hidden vector size
-        self.N_h = config.HX_SIZE
+        N_h = config.HX_SIZE
+        # Action space size
+        N_a = config.ACTION_SPACE_SIZE
         # Create Wx+b
-        self.l1 = torch.nn.Linear(self.N_z + self.N_h, 3)
+        self.l1 = torch.nn.Linear(N_z + N_h, N_a)
         # Sigmoid activation function for output
         self.sigmoid1 = torch.nn.Sigmoid()
 
