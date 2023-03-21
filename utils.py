@@ -18,7 +18,6 @@ class MasterConfig(dotdict):
         "HX_SIZE",
         "ACTION_SPACE_SIZE",
         "N_GAUSSIANS",
-        "LSTM_CELL_ST",
         "TEMP"
     ]
 
