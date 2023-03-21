@@ -70,8 +70,7 @@ class Plugin(ABC):
 class DataRecorder(Plugin):
 
     """
-    Saves agent experiences to files.
-    This collects data to train the V and M networks.
+    Saves agent experiences to storage for training data.
     Plugin must be given to both the environment and agent.
 
     Args:
