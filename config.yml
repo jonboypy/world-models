@@ -13,8 +13,5 @@ ACTION_SPACE_SIZE: 3
 # (int) The number of Gaussians to model for mixture density network
 N_GAUSSIANS: 5
 
-# (bool) Determines if LSTM cell state is concatenated with z
-LSTM_CELL_ST: False
-
 # (float) temperature parameter that controls the model uncertainty
 TEMP: 1.0
