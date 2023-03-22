@@ -1,8 +1,10 @@
 #Imports
 from abc import abstractmethod
-from typing import Tuple, Optional
+from typing import Tuple, Optional, Union
 import torch
+import numpy as np
 import pytorch_lightning as pl
+import h5py
 from utils import MasterConfig
 
 # Datasets
@@ -24,14 +26,56 @@ class Dataset(torch.utils.data.Dataset):
         raise NotImplementedError() 
 
     @abstractmethod
-    def __getitem__(self) -> Tuple[torch.Tensor]:
+    def __getitem__(self) -> Union[torch.Tensor, Tuple[torch.Tensor]]:
         raise NotImplementedError()
 
 class VnetDataset(Dataset):
 
     def __init__(self, config: MasterConfig) -> None:
         super().__init__(config)
-    #TODO: get item returns just image
+        self._setup()
+    
+    def _setup(self) -> None:
+        # load HDF5
+        self._hf = h5py.File(self.config.DATA, 'r')
+        # calculate length of data and create LUT for indicies
+        self._len = 0
+        self._idx_dict = {} # {(start_idx, end_idx): episode #}
+        for eps, ds in self._hf.items():
+            st = self._len
+            self._len += len(ds['actions'])
+            end = self._len
+            self._idx_dict[(st, end)] = int(eps)
+
+    def __len__(self) -> int:
+        return self._len
+
+    def __getitem__(self, idx: int) -> torch.Tensor:
+        # get episode number and step number from index
+        eps, step = self._idx_2_eps_step(idx)
+        # get image from dataset
+        img = self._hf[str(eps)]['observations'][step]
+        # preprocess image
+        img = self._preprocess(img)
+        return img
+
+    def _preprocess(self, img: np.ndarray) -> torch.Tensor:
+        # convert numpy uint8 arr to torch 32-bit float tensor
+        img = torch.tensor(img, dtype=torch.float32)
+        # scale all pixels to the range [0,1]
+        img = img / 255.
+        # permute dims to Torch standard (C,H,W)
+        img = img.permute(2,0,1)
+        return img
+
+
+    def _idx_2_eps_step(self, idx: int) -> Tuple[int]:
+        for idx_range, eps in self._idx_dict.items():
+            st, end = idx_range
+            if idx >= st and idx < end:
+                step = idx - st
+                return eps, step
+
 
 class MnetDataset(Dataset):
 
