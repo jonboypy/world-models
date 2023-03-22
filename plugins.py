@@ -6,6 +6,7 @@ import functools
 from abc import ABC
 from PIL import Image
 import numpy as np
+import h5py
 
 
 class Plugin(ABC):
@@ -75,20 +76,28 @@ class DataRecorder(Plugin):
 
     Args:
         save_dir: Path to directory to save data to.
+        as_hdf5: If true, save dataset as HDF5.
     """
 
-    def __init__(self, save_dir: Path) -> None:
+    def __init__(self, save_dir: Path, name: str,
+                 as_hdf5: bool = False) -> None:
         super().__init__()
         self.save_dir = save_dir
         if save_dir.exists():
             shutil.rmtree(save_dir)
+        save_dir.mkdir(parents=True)
         self.eps = -1
         self.step = 0
         self.eps_data = {}
+        self.as_hdf5 = as_hdf5
+        if as_hdf5:
+            self.hf = h5py.File(save_dir / 
+                        f'{name}.hdf5', 'a') 
 
     def __del__(self) -> None:
         if self.eps_data:
             self._save_episode_data()
+        self.hf.close()
 
     def pre_policy(self, state: np.ndarray):
         self.eps_data[self.step] = state
@@ -110,18 +119,37 @@ class DataRecorder(Plugin):
         return output
 
     def _save_episode_data(self) -> None:
-        (self.save_dir / f'episode-{self.eps}').mkdir(
-                            parents=True, exist_ok=True)
-        eps_dir = self.save_dir / f'episode-{self.eps}'
+        if self.as_hdf5:
+            self._save_episode_data_hdf5()
+        else:
+            (self.save_dir / f'episode-{self.eps}').mkdir(
+                                parents=True, exist_ok=True)
+            eps_dir = self.save_dir / f'episode-{self.eps}'
+            actions = []
+            for step, data in self.eps_data.items():
+                obs, action = data
+                actions.append(action)
+                img = self._preprocess(obs)
+                step = str(step).zfill(len(str(self.step)))
+                img.save(eps_dir / f'step-{step}.png')
+            actions = np.array(actions)
+            np.save(eps_dir / 'actions', actions)
+
+    def _save_episode_data_hdf5(self) -> None:
+        group = self.hf.create_group(str(self.eps))
+        imgs = []
         actions = []
-        for step, data in self.eps_data.items():
+        for _, data in self.eps_data.items():
             obs, action = data
-            actions.append(action)
             img = self._preprocess(obs)
-            step = str(step).zfill(len(str(self.step)))
-            img.save(eps_dir / f'step-{step}.png')
+            img = np.array(img, dtype=np.uint8)
+            imgs.append(img)
+            actions.append(action)
+        imgs = np.array(imgs)
         actions = np.array(actions)
-        np.save(eps_dir / 'actions', actions)
+        _ = group.create_dataset('observations', data=imgs)
+        _ = group.create_dataset('actions', data=actions)
+
 
     def _preprocess(self, obs: np.ndarray) -> Image.Image:
         img = Image.fromarray(obs)
