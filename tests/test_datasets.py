@@ -21,9 +21,14 @@ class TestMnetDataset(unittest.TestCase):
 
     def setUp(self) -> None:
         self.config = MasterConfig.from_yaml('./config.yml')
-        self.dataset = VnetDataset(self.config)
-    
-    #TODO
+        MnetDataset.TEST = True
+        self.dataset = MnetDataset(self.config)
+ 
+    def test_getitem(self) -> None:
+        z, action, z_next = self.dataset[0]
+        self.assertIsInstance(z, torch.Tensor)
+        self.assertIsInstance(action, torch.Tensor)
+        self.assertIsInstance(z_next, torch.Tensor)
 
 
 class TestCnetDataset(unittest.TestCase):
