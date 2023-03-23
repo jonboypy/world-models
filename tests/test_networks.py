@@ -15,7 +15,7 @@ class TestVnet(unittest.TestCase):
     def test_encoder_network(self) -> None:
         N_z = self.config.Z_SIZE
         x = torch.rand(1, 3, 64, 64)
-        z = self.net.encoder(x)
+        z, _, _ = self.net.encoder(x)
         self.assertEqual(
             z.size(),
             torch.Size([1, N_z]))
