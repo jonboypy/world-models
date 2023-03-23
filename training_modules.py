@@ -66,7 +66,7 @@ class MnetTrainingModule(TrainingModule):
         self.net = Mnet(config)
 
     def loss_function(self,
-            z_next_est_dist: torch.distribution.Distribution,
+            z_next_est_dist: torch.distributions.Distribution,
             z_next: torch.Tensor) -> torch.Tensor:
         # negative log probability
         #TODO: might need more sophisticated
