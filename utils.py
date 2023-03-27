@@ -5,7 +5,11 @@ import yaml
 
 class dotdict(dict):
     """dot.notation access to dictionary attributes"""
-    __getattr__ = dict.get
+    def __getattr__(self, item):
+        try:
+            return self[item]
+        except KeyError as e:
+            raise AttributeError from e
     __setattr__ = dict.__setitem__
     __delattr__ = dict.__delitem__
 
@@ -15,10 +19,6 @@ class MasterConfig(dotdict):
     REQUIRED_ATTR = [
         "ENV_NAME",
         "Z_SIZE",
-        "HX_SIZE",
-        "ACTION_SPACE_SIZE",
-        "N_GAUSSIANS",
-        "TEMP"
     ]
 
     @staticmethod
