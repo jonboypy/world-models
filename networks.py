@@ -124,19 +124,35 @@ class Mnet(Network):
         # Instantiate MDN
         self.mdn = self.MDN(config)
 
-    def forward(self, z_prev: torch.Tensor,
+    def forward(self, z: torch.Tensor,
+                a_prev: torch.Tensor) -> Tuple[
+                torch.distributions.MixtureSameFamily, torch.Tensor]:
+        # Dims: (S,B,Z), (S,B,A)
+        # Concatenate the latent vector & previous action
+        za = torch.cat([z, a_prev], -1)
+        # Compute LSTM
+        h, _ = self.lstm(za)
+        # Compute MDN
+        z_next_est_dist = self.mdn(h)
+        # return mixture distribution of the
+        #   next latent vector and the new hidden vector
+        return z_next_est_dist, h
+
+    def forward_with_hx(self, z: torch.Tensor,
+                h_prev: Tuple[torch.Tensor],
                 a_prev: torch.Tensor) -> Tuple[
                 torch.distributions.MixtureSameFamily, torch.Tensor]:
         # Dims: (S,B,Z), (S,B,A)
         # Concatenate the previous latent vector & previous action
-        za = torch.cat([z_prev, a_prev], -1)
+        za = torch.cat([z, a_prev], -1)
         # Compute LSTM
-        h_prev, _ = self.lstm(za)
+        out, h_new = self.lstm.forward_with_hx(za, h_prev)
         # Compute MDN
-        z_next_est_dist = self.mdn(h_prev)
+        z_next_est_dist = self.mdn(out)
         # return mixture distribution of the
         #   next latent vector and the new hidden vector
-        return z_next_est_dist, h_prev
+        return z_next_est_dist, out, h_new
+
 
     class LSTM(Network):
         """
@@ -158,6 +174,13 @@ class Mnet(Network):
             # Compute LSTM & return output
             #   Uses h0, c0 == 0
             return self.net(x)
+
+        def forward_with_hx(self, x: torch.Tensor,
+                            hx: Tuple[torch.Tensor]
+                            ) -> Tuple[torch.Tensor]:
+            # Compute LSTM & return output
+            return self.net(x, hx)
+
 
     class MDN(Network):
         """
@@ -220,6 +243,10 @@ class Cnet(Network):
         N_a = config.ACTION_SPACE_SIZE
         # Create Wx+b
         self.l1 = torch.nn.Linear(N_z + N_h, N_a)
+        # turn off grads since we are doing
+        #   gradient free optimzation :-)
+        self.l1.weight.requires_grad = False
+        self.l1.bias.requires_grad = False
         # Sigmoid activation function for output
         self.sigmoid1 = torch.nn.Sigmoid()
 
