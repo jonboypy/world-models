@@ -80,7 +80,6 @@ class VnetDataset(Dataset):
                 step = idx - st
                 return eps, step
 
-
 class MnetDataset(Dataset):
     
     def __init__(self, config: MasterConfig) -> None:
@@ -203,13 +202,6 @@ class MnetDataset(Dataset):
         # update dataset to Z distribution dataset
         self._hf = z_hf
         self._hf_dir = z_hf_path
-      
-class CnetDataset(Dataset):
-
-    def __init__(self, config: MasterConfig) -> None:
-        super().__init__(config)
-
-    #TODO: getitem returns z_prev, h_prev
 
 # Data Module
 class DataModule(pl.LightningDataModule):
