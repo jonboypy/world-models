@@ -8,7 +8,8 @@ from utils import MasterConfig
 class TestGymEnv(unittest.TestCase):
 
     def setUp(self) -> None:
-        self.config = MasterConfig.from_yaml('./config.yml')
+        self.config = MasterConfig.from_yaml(
+            './tests/training-configurations/Vnet-config.yml')
         self.config.ENV_NAME = "CarRacing-v1"
         self.env = GymEnvironment(self.config)
 

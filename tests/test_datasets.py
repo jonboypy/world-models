@@ -9,7 +9,8 @@ from utils import MasterConfig
 class TestVnetDataset(unittest.TestCase):
 
     def setUp(self) -> None:
-        self.config = MasterConfig.from_yaml('./config.yml')
+        self.config = MasterConfig.from_yaml(
+            './tests/training-configurations/Vnet-config.yml')
         self.dataset = VnetDataset(self.config)
 
     def test_getitem(self) -> None:
@@ -20,7 +21,8 @@ class TestVnetDataset(unittest.TestCase):
 class TestMnetDataset(unittest.TestCase):
 
     def setUp(self) -> None:
-        self.config = MasterConfig.from_yaml('./config.yml')
+        self.config = MasterConfig.from_yaml(
+            './tests/training-configurations/Mnet-config.yml')           
         MnetDataset.TEST = True
         self.dataset = MnetDataset(self.config)
  
@@ -29,12 +31,3 @@ class TestMnetDataset(unittest.TestCase):
         self.assertIsInstance(z, torch.Tensor)
         self.assertIsInstance(action, torch.Tensor)
         self.assertIsInstance(z_next, torch.Tensor)
-
-
-class TestCnetDataset(unittest.TestCase):
-
-    def setUp(self) -> None:
-        self.config = MasterConfig.from_yaml('./config.yml')
-        self.dataset = VnetDataset(self.config)
-    
-    #TODO

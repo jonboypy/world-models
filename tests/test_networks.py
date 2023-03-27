@@ -9,7 +9,8 @@ from utils import MasterConfig
 class TestVnet(unittest.TestCase):
 
     def setUp(self) -> None:
-        self.config = MasterConfig.from_yaml('./config.yml')
+        self.config = MasterConfig.from_yaml(
+            './tests/training-configurations/Vnet-config.yml')
         self.net = Vnet(self.config)
 
     def test_encoder_network(self) -> None:
@@ -45,7 +46,8 @@ class TestVnet(unittest.TestCase):
 class TestMnet(unittest.TestCase):
 
     def setUp(self) -> None:
-        config = MasterConfig.from_yaml('./config.yml')
+        config = MasterConfig.from_yaml(
+            './tests/training-configurations/Mnet-config.yml')
         self.N_z = config.Z_SIZE
         self.N_h = config.HX_SIZE
         self.N_a = config.ACTION_SPACE_SIZE
@@ -84,7 +86,8 @@ class TestMnet(unittest.TestCase):
 class TestCnet(unittest.TestCase):
 
     def setUp(self) -> None:
-        self.config = MasterConfig.from_yaml('./config.yml')
+        self.config = MasterConfig.from_yaml(
+            './tests/training-configurations/Cnet-config.yml')
         self.net = Cnet(self.config)
         self.N_z = self.config.Z_SIZE
         self.N_h = self.config.HX_SIZE

@@ -8,7 +8,8 @@ from utils import MasterConfig
 class TestRandomGymAgent(unittest.TestCase):
 
     def setUp(self) -> None:
-        self.config = MasterConfig.from_yaml('./config.yml')
+        self.config = MasterConfig.from_yaml(
+            './tests/training-configurations/Vnet-config.yml')
         env = GymEnvironment(self.config)
         self.agent = RandomGymAgent(env)
 
