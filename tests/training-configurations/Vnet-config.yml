@@ -1,0 +1,14 @@
+# (str) Name of environment (supported: "CarRacing-v1")
+ENV_NAME: "CarRacing-v1"
+
+# (str) Path to data .hdf5 file.
+DATA: './data/data.hdf5'
+
+# (int) The size of the latent vector Z
+Z_SIZE: 32
+
+# (int) The number of Gaussians to model for mixture density network
+N_GAUSSIANS: 5
+
+# (float) temperature parameter that controls the model uncertainty
+TEMP: 1.0
