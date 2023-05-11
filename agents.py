@@ -1,5 +1,5 @@
 # Imports
-from typing import Tuple, List
+from typing import List
 from abc import ABC, abstractmethod
 import numpy as np
 from PIL import Image
@@ -26,7 +26,7 @@ class Agent(ABC):
         self.avg_cum_reward = 0.
         self.state = self.env.reset()
 
-    def act(self) -> Tuple[np.ndarray]:
+    def act(self) -> np.ndarray:
         action = self.policy(self.state)
         obs, reward, done, _ = self.env.step(action)
         self.state = obs
