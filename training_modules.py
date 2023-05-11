@@ -1,6 +1,5 @@
 # Imports
 from typing import Tuple
-import copy
 from abc import abstractmethod
 import torch
 import pytorch_lightning as pl
@@ -60,7 +59,9 @@ class VnetTrainingModule(TrainingModule):
         reconstructed, latent = self.net(image)
         loss = self.loss_function(image, reconstructed, latent)
         return loss
-
+    
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        y = self.net(x)
 
 class MnetTrainingModule(TrainingModule):
     """
@@ -83,7 +84,7 @@ class MnetTrainingModule(TrainingModule):
         # unpack batch
         # (B,S,Z), (B,S,A)
         z_prev, a_prev, z_next = batch
-        z_next_est_dist = self.net(z_prev, a_prev)
+        z_next_est_dist, _ = self.net(z_prev, a_prev)
         loss = self.loss_function(z_next_est_dist, z_next)
         return loss
 
@@ -91,7 +92,7 @@ class MnetTrainingModule(TrainingModule):
         # unpack batch
         # (B,S,Z), (B,S,A)
         z_prev, a_prev, z_next = batch
-        z_next_est_dist = self.net(z_prev, a_prev)
+        z_next_est_dist, _ = self.net(z_prev, a_prev)
         loss = self.loss_function(z_next_est_dist, z_next)
         return loss
 
@@ -170,24 +171,20 @@ class CnetTrainingModule:
     def _evaluate_population(self,
             population: torch.Tensor) -> torch.Tensor:
         # Launch parallel evaluations of each individual in population
-        cfg = copy.deepcopy(self.config)
-        scores = ray.get([self._evaluate_individual.remote(
-                          cfg,
-                          population[i],
-                          self.vnet_encoder, self.mnet,
-                          self.config.EVAL_N_ROLLOUTS)
-                          for i in range(self.pop_size)]) 
+        training_module = ray.put(self)
+        scores = []
+        for idx in range(self.pop_size):
+            scores += [
+                self._evaluate_individual.remote(
+                    training_module, population[idx])]
+        scores = ray.get(scores)
         return scores
     
-    @staticmethod
     @ray.remote
-    def _evaluate_individual(config: MasterConfig,
-                             individual: torch.Tensor,
-                             vnet_encoder: torch.nn.Module,
-                             mnet: torch.nn.Module,
-                             n_rollouts: int) -> torch.Tensor:
+    def _evaluate_individual(
+            self, individual: torch.Tensor) -> torch.Tensor:
         # Load parameters into C-Net
-        cnet = Cnet(config)
+        cnet = Cnet(self.config)
         # Reshape params to size of weight matrix (+1 for bias vector)
         individual = individual.reshape(cnet.l1.weight.size(0),
                                         cnet.l1.weight.size(1)+1)
@@ -195,15 +192,32 @@ class CnetTrainingModule:
         cnet.l1.weight = torch.nn.Parameter(individual[:,:-1], False)
         cnet.l1.bias = torch.nn.Parameter(individual[:,-1], False)
         # Make environment
-        env = GymEnvironment(config)
+        env = GymEnvironment(self.config)
         env.reset()
         # Make agent
-        agent = WorldModelGymAgent(env, vnet_encoder,
-                                   mnet, cnet)
+        agent = WorldModelGymAgent(env, self.vnet_encoder,
+                                   self.mnet, cnet)
         # Run rollouts
         n_eps = 0
-        while n_eps < n_rollouts: #TODO could parallelize the rollouts too?
+        while n_eps < self.config.EVAL_N_ROLLOUTS: #TODO could parallelize the rollouts too?
             n_eps += agent.act()
         # Get fitness score of individual (i.e. mean return)
         score = agent.avg_cum_reward
+
+        #scores = []
+        #for _ in range(self.config.EVAL_N_ROLLOUTS):
+        #    scores += [self._individual_rollout.remote(copy.deepcopy(agent))]
+        #scores = ray.get(scores)
+        # Get fitness score of individual (i.e. mean return)
+        #score = sum(scores)/len(scores)
+
         return score
+
+    @staticmethod
+    @ray.remote
+    def _individual_rollout(agent: WorldModelGymAgent) -> float:
+        done = False
+        while not done:
+            done = agent.act()
+        return agent.avg_cum_reward
+
