@@ -59,9 +59,6 @@ class VnetTrainingModule(TrainingModule):
         reconstructed, latent = self.net(image)
         loss = self.loss_function(image, reconstructed, latent)
         return loss
-    
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        y = self.net(x)
 
 class MnetTrainingModule(TrainingModule):
     """
