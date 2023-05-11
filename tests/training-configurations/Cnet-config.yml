@@ -32,10 +32,10 @@ MNET_CKPT: ''
 N_GAUSSIANS: 5
 
 # (int) The number of rollouts to perform for evaluating an individual.
-EVAL_N_ROLLOUTS: 16
+EVAL_N_ROLLOUTS: 1
 
 # (int) Perform a test of the current best individual every N epochs.
 TEST_EVERY_N_EPOCHS: 25
 
 # (int) The number of rollouts to perform when testing the current best individual.
-TEST_N_ROLLOUTS: 1024
+TEST_N_ROLLOUTS: 4
