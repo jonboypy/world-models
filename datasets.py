@@ -216,16 +216,36 @@ class DataModule(pl.LightningDataModule):
         self.config = config
 
     def prepare_data(self) -> None:
-        #TODO: optionally run data collector here
         pass
-
+        
     def setup(self, stage: Optional[str] = None) -> None:
-        # TODO: instantiate appropriate dataset here
-        #       split, etc.
-        pass
+        # Get correct dataset
+        exp_type = self.config.EXPERIMENT_TYPE
+        if exp_type == 'V-Net':
+            dataset = VnetDataset(self.config)
+        elif exp_type == 'M-Net':
+            dataset = MnetDataset(self.config)
+        else:
+            raise SyntaxError
+        # Split dataset
+        (self.train_ds,
+         self.val_ds) = self._train_val_split(dataset)
 
     def train_dataloader(self) -> torch.utils.data.DataLoader:
-        pass
+        return torch.utils.data.DataLoader(
+            self.train_ds, batch_size=self.config.BATCH_SIZE,
+            shuffle=True, num_workers=self.config.N_WORKERS)
 
     def val_dataloader(self) -> torch.utils.data.DataLoader:
-        pass
+        return torch.utils.data.DataLoader(
+            self.val_ds, batch_size=self.config.BATCH_SIZE,
+            shuffle=True, num_workers=self.config.N_WORKERS)
+    
+    def _train_val_split(self, dataset: torch.utils.data.Dataset
+                         ) -> Tuple[torch.utils.data.Dataset]:
+        generator = torch.Generator().manual_seed(
+                                self.config.RNG_SEED)
+        p = self.config.TRAIN_VAL_SPLIT
+        train_ds, val_ds = torch.utils.data.random_split(
+                                dataset, [p, 1-p], generator)
+        return train_ds, val_ds

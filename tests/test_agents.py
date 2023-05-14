@@ -9,7 +9,7 @@ class TestRandomGymAgent(unittest.TestCase):
 
     def setUp(self) -> None:
         self.config = MasterConfig.from_yaml(
-            './tests/training-configurations/Vnet-config.yml')
+            './tests/master-config.yml')
         env = GymEnvironment(self.config)
         self.agent = RandomGymAgent(env)
 

@@ -8,13 +8,12 @@ from environments import GymEnvironment
 from plugins import DataRecorder
 from agents import RandomGymAgent
 
-
+# Runners
 class Runner(ABC):
 
     def __init__(self, config: MasterConfig) -> None:
         super().__init__()
         self.config = config
-
 
 class DataCollector(Runner):
 
@@ -33,6 +32,11 @@ class DataCollector(Runner):
                       desc='Collecting data', unit='step'):
             self.agent.act()
 
+class AgentTester(Runner):
+
+    def __init__(self, config) -> None:
+        super().__init__(config)
+    #TODO
 
 def main() -> None:
     config = MasterConfig.from_yaml(args.config)
@@ -44,9 +48,9 @@ def main() -> None:
         runner.execute()
 
 # CLI
-parser = argparse.ArgumentParser(description='Main interface to project.')
+parser = argparse.ArgumentParser(description='Runs environment for collecting data and testing agents.')
 parser.add_argument('--config', help='Path to .yaml configuration file.',
-                    default='./config.yml')
+                    default='./master-config.yml')
 parser.add_argument('--collect-data', action='store_true',
                     help='Flag to run data collection procedure.')
 parser.add_argument('--collection-steps',

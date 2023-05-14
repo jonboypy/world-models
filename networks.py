@@ -34,9 +34,9 @@ class Vnet(Network):
         self.decoder = self.Decoder(config)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        z, _, _ = self.encoder(x)
+        z, mu, sigma = self.encoder(x)
         y = self.decoder(z.clone())
-        return y, z
+        return y, z, mu, sigma
 
     class Encoder(Network):
         """

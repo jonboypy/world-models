@@ -1,5 +1,5 @@
 # Imports
-from typing import Tuple
+from typing import Any, Tuple
 from abc import abstractmethod
 import torch
 import pytorch_lightning as pl
@@ -10,8 +10,7 @@ from networks import Vnet, Mnet, Cnet
 from environments import GymEnvironment
 from agents import WorldModelGymAgent
 
-
-# PTL modules
+# Training Modules
 class TrainingModule(pl.LightningModule):
     """
     Base class which all other training modules derive from.
@@ -25,13 +24,20 @@ class TrainingModule(pl.LightningModule):
         self.config = config
 
     @abstractmethod
+    def configure_optimizers(self) -> torch.optim.Optimizer:
+        raise NotImplementedError()
+
+    @abstractmethod
+    def loss_function(self) -> torch.Tensor:
+        raise NotImplementedError()
+
+    @abstractmethod
     def training_step(self) -> torch.Tensor:
         raise NotImplementedError()
 
     @abstractmethod
     def validation_step(self) -> torch.Tensor:
         raise NotImplementedError()
-
 
 class VnetTrainingModule(TrainingModule):
     """
@@ -42,22 +48,31 @@ class VnetTrainingModule(TrainingModule):
         super().__init__(config)
         self.net = Vnet(config)
 
+    def configure_optimizers(self) -> torch.optim.Optimizer:
+        optim = torch.optim.Adam(self.net.parameters(),
+                                 lr=self.config.LR)
+        return optim
+
     def loss_function(self, original: torch.Tensor,
                       reconstructed: torch.Tensor,
-                      latent: torch.Tensor) -> torch.Tensor:
-        generative_loss = torch.nn.MSELoss()(reconstructed, original)
-        latent_loss = torch.nn.KLDivLoss()(latent, torch.randn_like(latent))
-        loss = generative_loss + latent_loss
+                      mu: torch.Tensor, sigma: torch.Tensor
+                      ) -> torch.Tensor:
+        reconstruction_loss = torch.nn.functional.mse_loss(
+                                    reconstructed, original)
+        kld_loss = torch.mean(-0.5 * torch.sum(
+            1 + sigma.log() - mu ** 2 - sigma.log().exp(),
+            dim = 1), dim = 0)
+        loss = reconstruction_loss + kld_loss
         return loss
 
     def training_step(self, image: torch.Tensor) -> torch.Tensor:
-        reconstructed, latent = self.net(image)
-        loss = self.loss_function(image, reconstructed, latent)
+        reconstructed, _, mu, sigma = self.net(image)
+        loss = self.loss_function(image, reconstructed, mu, sigma)
         return loss
 
     def validation_step(self, image: torch.Tensor) -> torch.Tensor:
-        reconstructed, latent = self.net(image)
-        loss = self.loss_function(image, reconstructed, latent)
+        reconstructed, _, mu, sigma = self.net(image)
+        loss = self.loss_function(image, reconstructed, mu, sigma)
         return loss
 
 class MnetTrainingModule(TrainingModule):
@@ -69,6 +84,11 @@ class MnetTrainingModule(TrainingModule):
         super().__init__(config)
         self.net = Mnet(config)
 
+    def configure_optimizers(self) -> torch.optim.Optimizer:
+        optim = torch.optim.Adam(self.net.parameters(),
+                                 lr=self.config.LR)
+        return optim
+
     def loss_function(self,
             z_next_est_dist: torch.distributions.Distribution,
             z_next: torch.Tensor) -> torch.Tensor:
@@ -79,7 +99,6 @@ class MnetTrainingModule(TrainingModule):
 
     def training_step(self, batch: torch.Tensor) -> torch.Tensor:
         # unpack batch
-        # (B,S,Z), (B,S,A)
         z_prev, a_prev, z_next = batch
         z_next_est_dist, _ = self.net(z_prev, a_prev)
         loss = self.loss_function(z_next_est_dist, z_next)
@@ -87,14 +106,13 @@ class MnetTrainingModule(TrainingModule):
 
     def validation_step(self, batch: torch.Tensor) -> torch.Tensor:
         # unpack batch
-        # (B,S,Z), (B,S,A)
         z_prev, a_prev, z_next = batch
         z_next_est_dist, _ = self.net(z_prev, a_prev)
         loss = self.loss_function(z_next_est_dist, z_next)
         return loss
 
-
 class CnetTrainingModule:
+
     """
     Module designed for 'Covariance-Matrix
     Adaptation Evolution Strategy' to train the
@@ -218,3 +236,26 @@ class CnetTrainingModule:
             done = agent.act()
         return agent.avg_cum_reward
 
+# Callbacks
+class MetricLoggerCallback(pl.Callback):
+
+    """
+    Simple callback to log training & validation losses.
+    Assumes training/validation step returns a torch.Tensor
+    of the calculated loss
+    """
+
+    def __init__(self) -> None:
+        super().__init__()
+
+    def on_train_batch_end(self, trainer: pl.Trainer,
+                           pl_module: pl.LightningModule,
+                           outputs: torch.Tensor, batch: Any,
+                           batch_idx: int) -> None:
+        pl_module.log('training_loss', outputs)
+
+    def on_validation_batch_end(self, trainer: pl.Trainer,
+                                pl_module: pl.LightningModule,
+                                outputs: torch.Tensor, batch: Any,
+                                batch_idx: int, dataloader_idx: int = 0) -> None:
+        pl_module.log('validation_loss', outputs)

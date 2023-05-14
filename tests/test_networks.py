@@ -10,7 +10,7 @@ class TestVnet(unittest.TestCase):
 
     def setUp(self) -> None:
         self.config = MasterConfig.from_yaml(
-            './tests/training-configurations/Vnet-config.yml')
+            './tests/master-config.yml')
         self.net = Vnet(self.config)
 
     def test_encoder_network(self) -> None:
@@ -34,7 +34,7 @@ class TestVnet(unittest.TestCase):
     def test_full_network(self) -> None:
         N_z = self.config.Z_SIZE
         x = torch.rand(1, 3, 64, 64)
-        y, z = self.net(x)
+        y, z, _, _ = self.net(x)
         self.assertEqual(
             z.size(),
             torch.Size([1, N_z]))
@@ -47,7 +47,7 @@ class TestMnet(unittest.TestCase):
 
     def setUp(self) -> None:
         config = MasterConfig.from_yaml(
-            './tests/training-configurations/Mnet-config.yml')
+            './tests/master-config.yml')
         self.N_z = config.Z_SIZE
         self.N_h = config.HX_SIZE
         self.N_a = config.ACTION_SPACE_SIZE
@@ -87,7 +87,7 @@ class TestCnet(unittest.TestCase):
 
     def setUp(self) -> None:
         self.config = MasterConfig.from_yaml(
-            './tests/training-configurations/Cnet-config.yml')
+            './tests/master-config.yml')
         self.net = Cnet(self.config)
         self.N_z = self.config.Z_SIZE
         self.N_h = self.config.HX_SIZE

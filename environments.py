@@ -1,7 +1,7 @@
 # Imports
 from abc import ABC, abstractmethod
 from typing import List
-import gym
+import gymnasium as gym
 import numpy as np
 from plugins import Plugin
 from utils import MasterConfig

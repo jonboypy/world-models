@@ -1,7 +1,15 @@
 # Imports
+import pathlib
+import argparse
 from abc import ABC, abstractmethod
+from typing import Any, List
+import wandb
 import pytorch_lightning as pl
 from utils import MasterConfig
+from training_modules import (
+    VnetTrainingModule, MnetTrainingModule,
+    CnetTrainingModule, MetricLoggerCallback)
+from datasets import DataModule
 
 # Trainers
 class Trainer(ABC):
@@ -29,7 +37,6 @@ class Trainer(ABC):
     def test(self) -> None:
         raise NotImplementedError
 
-
 class LitTrainer(Trainer):
 
     """
@@ -42,10 +49,9 @@ class LitTrainer(Trainer):
         self._is_setup = False
 
     def setup(self) -> None:
-        self._callbacks = self._get_callbacks()
         self._loggers = self._get_loggers()
-        self._strategy = self._get_strategy()
-        self._profilers = self._get_profilers()
+        self._callbacks = self._get_callbacks()
+        self._profiler = self._get_profiler()
         self._data_module = self._get_data_module()
         self._training_module = self._get_training_module()
         self._lit_trainer = self._get_lit_trainer()
@@ -59,34 +65,83 @@ class LitTrainer(Trainer):
         assert self._is_setup
         return super().test()
 
-    def _get_callbacks(self):
-        ...
-
     def _get_loggers(self):
-        ...
+        loggers = []
+        loggers += [pl.loggers.WandbLogger(
+                    save_dir=self.config.EXPERIMENT_DIR,
+                    name=self.config.EXPERIMENT_NAME,
+                    project='World-Models')]
+        self.exp_dir = (pathlib.Path(loggers[0].save_dir) /
+                        loggers[0].name /
+                        f'version_{loggers[0].version}')
+        return loggers
 
-    def _get_stategy(self):
-        ...
 
-    def _get_profilers(self):
-        ...
+    def _get_callbacks(self) -> List[pl.callbacks]:
+        callbacks = []
+        #callbacks += [pl.callbacks.ModelCheckpoint(
+        #        monitor='validation_loss',
+        #        dirpath=(self.exp_dir / 'checkpoints'),
+        #        filename='{epoch:03d}-{validation_loss:.3e}',
+        #        mode='min',
+        #        save_last=True,
+        #        save_top_k=3)]
+        callbacks += [MetricLoggerCallback()]
+        return callbacks
+
+    def _get_profiler(self) -> Any:
+        return None
 
     def _get_data_module(self) -> pl.LightningDataModule:
-        ...
+        datamodule = DataModule(self.config)
+        return datamodule
 
     def _get_training_module(self) -> pl.LightningModule:
-        ...
-
+        exp_type = self.config.EXPERIMENT_TYPE
+        if exp_type == 'V-Net':
+            return VnetTrainingModule(self.config)
+        elif exp_type == 'M-Net':
+            return MnetTrainingModule(self.config)
+        else:
+            raise SyntaxError(
+                f'Experiment type {exp_type} not supported.')
+    
     def _get_lit_trainer(self) -> pl.Trainer:
-        ...
-
+        return pl.Trainer(self._training_module,
+                          self._data_module,
+                          precision=16,
+                          logger=self._loggers,
+                          callbacks=self._callbacks,
+                          profiler=self._profiler)
 
 class EvolutionTrainer(Trainer):
 
     def __init__(self, config: MasterConfig) -> None:
         super().__init__(config)
         self._is_setup = False
+        raise NotImplementedError()
 
     def setup(self) -> None:
         self._is_setup = True
 
+# CLI
+parser = argparse.ArgumentParser(description='Runs training of networks.')
+parser.add_argument('--config', help='Path to .yaml configuration file.',
+                    default='./master-config.yml')
+args = parser.parse_args()
+
+def main() -> None:
+    config = MasterConfig.from_yaml(args.config)
+    if any(t == config.EXPERIMENT_TYPE for t in ('V-Net', 'M-Net')):
+        trainer = LitTrainer(config)
+        wandb.login(key=config.WANDB_KEY)
+    elif config.EXPERIMENT_TYPE == 'C-Net':
+        trainer = EvolutionTrainer(config)
+    else:
+        raise SyntaxError(f'Experiment type {config.EXPERIMENT_TYPE} not supported.')
+    # Train!
+    trainer.train()
+
+
+if __name__ == '__main__':
+    main()

@@ -24,15 +24,16 @@ class Agent(ABC):
         self.plugins = plugins
         self.eps_cum_reward = 0.
         self.avg_cum_reward = 0.
-        self.state = self.env.reset()
+        self.state, _ = self.env.reset()
 
     def act(self) -> np.ndarray:
         action = self.policy(self.state)
-        obs, reward, done, _ = self.env.step(action)
+        obs, reward, term, trunc, _ = self.env.step(action)
         self.state = obs
         self.eps_cum_reward += reward
+        done = max(term, trunc)
         if done:
-            self.state = self.env.reset()
+            self.state, _ = self.env.reset()
             self.avg_cum_reward = (self.avg_cum_reward +
                                    self.eps_cum_reward) / 2
             self.eps_cum_reward = 0.

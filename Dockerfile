@@ -1,18 +1,11 @@
-FROM rayproject/ray-ml:2.2.0-py310-gpu
+FROM rayproject/ray:2.4.0-py310-gpu
 
-RUN conda install swig -y && pip install box2d-py
+# Install dependencies
+RUN pip install -U box2d-py flake8 torch torchvision pytorch-lightning h5py wandb gymnasium[box2d]
 
-RUN sudo apt update && sudo apt install xvfb -y
-
-RUN echo 'alias python="xvfb-run python"' >> /home/ray/.bashrc
-
+# Misc.
 RUN echo 'export PS1="\[$(tput bold)\]\[\033[38;5;6m\]World-Models-Docker🐋\[$(tput sgr0)\]:\W\\$ \[$(tput sgr0)\]"' >> /home/ray/.bashrc
-
 ENV PYTHONPATH="$PYTHONPATH:/world-models"
-
 RUN echo 'cat /world-models/assets/banner.txt' >> /home/ray/.bashrc
-
-# updates:
-RUN pip install flake8
-
 RUN chmod 777 /home/ray
+ENV HOME=/home/ray

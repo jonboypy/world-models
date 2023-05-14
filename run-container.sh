@@ -11,5 +11,6 @@ docker run \
     -v="/etc/group:/etc/group:ro" \
     -v="/etc/passwd:/etc/passwd:ro" \
     -v="/etc/shadow:/etc/shadow:ro" \
+    -v="/etc/sudoers:/etc/sudoers:ro" \
     world-models:latest \
     bash

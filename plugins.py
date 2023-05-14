@@ -45,6 +45,8 @@ class Plugin(ABC):
         @functools.wraps(func)
         def hooked(self, *args, **kwargs):
             func_name = func.__name__
+            while func_name[0] == '_':
+                func_name = func_name[1:]
             if self.plugins:
                 for plugin in self.plugins:
                     if hasattr(plugin, f'pre_{func_name}'):
@@ -99,15 +101,15 @@ class DataRecorder(Plugin):
             self._save_episode_data()
         self.hf.close()
 
-    def pre_policy(self, state: np.ndarray):
+    def pre_policy(self, state: np.ndarray) -> None:
         self.eps_data[self.step] = state
 
-    def post_policy(self, output: Any) -> Any:
+    def post_policy(self, output: Any) -> None:
         self.eps_data[self.step] = (
             self.eps_data[self.step],
             output)
 
-    def post_step(self, output: Any) -> Any:
+    def post_step(self, output: Any) -> None:
         self.step += 1
 
     def post_reset(self, output: Any) -> Any:
@@ -149,7 +151,6 @@ class DataRecorder(Plugin):
         actions = np.array(actions)
         _ = group.create_dataset('observations', data=imgs)
         _ = group.create_dataset('actions', data=actions)
-
 
     def _preprocess(self, obs: np.ndarray) -> Image.Image:
         img = Image.fromarray(obs)
