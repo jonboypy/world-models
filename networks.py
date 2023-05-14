@@ -77,7 +77,7 @@ class Vnet(Network):
             sigma = self.fv2sigma(fv)
             z = mu + sigma * (self.gaussian.sample(
                 sigma.size()).to(self.dummy.device))
-            return z, mu, sigma
+            return z, mu, sigma # sigma -> log-variance
 
     class Decoder(Network):
         """

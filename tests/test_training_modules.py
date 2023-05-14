@@ -18,9 +18,9 @@ class TestVnetTrainingModule(unittest.TestCase):
         func = self.training_module.loss_function
         img = torch.rand(1, 3, 64, 64)
         mu = torch.zeros(1, self.config.Z_SIZE)
-        sigma = torch.ones(1, self.config.Z_SIZE)
+        sigma = torch.ones(1, self.config.Z_SIZE).log()
         loss = func(img, img, mu, sigma)
-        self.assertAlmostEquals(loss.item(), 0.0, 1)
+        self.assertEquals(loss.item(), 0.0)
     
     def test_training_step(self) -> None:
         image = torch.rand(1,3,64,64)

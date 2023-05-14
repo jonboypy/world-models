@@ -57,12 +57,12 @@ class VnetTrainingModule(TrainingModule):
                       reconstructed: torch.Tensor,
                       mu: torch.Tensor, sigma: torch.Tensor
                       ) -> torch.Tensor:
-        # Image reconstruction loss
+        # Image-Reconstruction loss
         reconstruction_loss = torch.nn.functional.mse_loss(
                                     reconstructed, original)
-        # KL-Divergence loss
+        # KL-Divergence loss (sigma -> log-variance)
         kld_loss = torch.mean(-0.5 * torch.sum(
-            1 + sigma.log() - mu ** 2 - sigma.log().exp(),
+            1 + sigma - mu ** 2 - sigma.exp(),
             dim = 1), dim = 0)
         loss = reconstruction_loss + kld_loss
         return loss
