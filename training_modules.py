@@ -57,22 +57,28 @@ class VnetTrainingModule(TrainingModule):
                       reconstructed: torch.Tensor,
                       mu: torch.Tensor, sigma: torch.Tensor
                       ) -> torch.Tensor:
+        # Image reconstruction loss
         reconstruction_loss = torch.nn.functional.mse_loss(
                                     reconstructed, original)
+        # KL-Divergence loss
         kld_loss = torch.mean(-0.5 * torch.sum(
             1 + sigma.log() - mu ** 2 - sigma.log().exp(),
             dim = 1), dim = 0)
         loss = reconstruction_loss + kld_loss
         return loss
 
-    def training_step(self, image: torch.Tensor) -> torch.Tensor:
-        reconstructed, _, mu, sigma = self.net(image)
-        loss = self.loss_function(image, reconstructed, mu, sigma)
+    def training_step(self, batch: torch.Tensor,
+                      batch_idx: int) -> torch.Tensor:
+        reconstructed, _, mu, sigma = self.net(batch)
+        loss = self.loss_function(
+            batch, reconstructed, mu, sigma)
         return loss
-
-    def validation_step(self, image: torch.Tensor) -> torch.Tensor:
-        reconstructed, _, mu, sigma = self.net(image)
-        loss = self.loss_function(image, reconstructed, mu, sigma)
+    
+    def validation_step(self, batch: torch.Tensor,
+                        batch_idx: int) -> torch.Tensor:
+        reconstructed, _, mu, sigma = self.net(batch)
+        loss = self.loss_function(
+            batch, reconstructed, mu, sigma)
         return loss
 
 class MnetTrainingModule(TrainingModule):
@@ -97,14 +103,16 @@ class MnetTrainingModule(TrainingModule):
         #       form of liklihood calculation
         return -z_next_est_dist.log_prob(z_next)
 
-    def training_step(self, batch: torch.Tensor) -> torch.Tensor:
+    def training_step(self, batch: torch.Tensor,
+                      batch_idx: int) -> torch.Tensor:
         # unpack batch
         z_prev, a_prev, z_next = batch
         z_next_est_dist, _ = self.net(z_prev, a_prev)
         loss = self.loss_function(z_next_est_dist, z_next)
         return loss
 
-    def validation_step(self, batch: torch.Tensor) -> torch.Tensor:
+    def validation_step(self, batch: torch.Tensor,
+                        batch_idx: int) -> torch.Tensor:
         # unpack batch
         z_prev, a_prev, z_next = batch
         z_next_est_dist, _ = self.net(z_prev, a_prev)
@@ -252,7 +260,7 @@ class MetricLoggerCallback(pl.Callback):
                            pl_module: pl.LightningModule,
                            outputs: torch.Tensor, batch: Any,
                            batch_idx: int) -> None:
-        pl_module.log('training_loss', outputs)
+        pl_module.log('training_loss', outputs['loss'])
 
     def on_validation_batch_end(self, trainer: pl.Trainer,
                                 pl_module: pl.LightningModule,
