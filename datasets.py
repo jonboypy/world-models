@@ -60,7 +60,7 @@ class VnetDataset(Dataset):
         # get image from dataset
         img = self._hf[str(eps)]['observations'][step]
         # preprocess image
-        img = self._preprocess(img)
+        img = self.preprocess(img)
         return img
 
     @classmethod
