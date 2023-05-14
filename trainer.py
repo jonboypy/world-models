@@ -58,8 +58,10 @@ class LitTrainer(Trainer):
         self._is_setup = True
 
     def train(self) -> None:
-        assert self._is_setup
-        return super().train()
+        assert self._is_setup, (
+            f'Trainer isnt setup! Call .setup()')
+        self._lit_trainer.fit(self._training_module,
+                              self._data_module)
 
     def test(self) -> None:
         assert self._is_setup
@@ -67,26 +69,28 @@ class LitTrainer(Trainer):
 
     def _get_loggers(self):
         loggers = []
-        loggers += [pl.loggers.WandbLogger(
-                    save_dir=self.config.EXPERIMENT_DIR,
-                    name=self.config.EXPERIMENT_NAME,
-                    project='World-Models')]
-        self.exp_dir = (pathlib.Path(loggers[0].save_dir) /
-                        loggers[0].name /
-                        f'version_{loggers[0].version}')
+        if not self.config.DEBUG:
+            loggers += [pl.loggers.WandbLogger(
+                        save_dir=self.config.EXPERIMENT_DIR,
+                        name=self.config.EXPERIMENT_NAME,
+                        project='World-Models')]
+            self.exp_dir = (pathlib.Path(loggers[0].save_dir) /
+                            loggers[0].name /
+                            f'version_{loggers[0].version}')
         return loggers
 
 
-    def _get_callbacks(self) -> List[pl.callbacks]:
+    def _get_callbacks(self) -> List[pl.Callback]:
         callbacks = []
-        #callbacks += [pl.callbacks.ModelCheckpoint(
-        #        monitor='validation_loss',
-        #        dirpath=(self.exp_dir / 'checkpoints'),
-        #        filename='{epoch:03d}-{validation_loss:.3e}',
-        #        mode='min',
-        #        save_last=True,
-        #        save_top_k=3)]
-        callbacks += [MetricLoggerCallback()]
+        if not self.config.DEBUG:
+            #callbacks += [pl.callbacks.ModelCheckpoint(
+            #        monitor='validation_loss',
+            #        dirpath=(self.exp_dir / 'checkpoints'),
+            #        filename='{epoch:03d}-{validation_loss:.3e}',
+            #        mode='min',
+            #        save_last=True,
+            #        save_top_k=3)]
+            callbacks += [MetricLoggerCallback()]
         return callbacks
 
     def _get_profiler(self) -> Any:
@@ -107,12 +111,12 @@ class LitTrainer(Trainer):
                 f'Experiment type {exp_type} not supported.')
     
     def _get_lit_trainer(self) -> pl.Trainer:
-        return pl.Trainer(self._training_module,
-                          self._data_module,
+        return pl.Trainer(max_epochs=self.config.EPOCHS,
                           precision=16,
                           logger=self._loggers,
                           callbacks=self._callbacks,
-                          profiler=self._profiler)
+                          profiler=self._profiler,
+                          fast_dev_run=self.config.DEBUG)
 
 class EvolutionTrainer(Trainer):
 
@@ -128,20 +132,37 @@ class EvolutionTrainer(Trainer):
 parser = argparse.ArgumentParser(description='Runs training of networks.')
 parser.add_argument('--config', help='Path to .yaml configuration file.',
                     default='./master-config.yml')
+parser.add_argument('--debug', action='store_true',
+                    help='Run trainer in debug-mode')
 args = parser.parse_args()
 
 def main() -> None:
+    # Create config object
     config = MasterConfig.from_yaml(args.config)
+
+    # Set debugging options
+    if args.debug:
+        config.DEBUG = True
+    else:
+        config.DEBUG = False
+    # Create experiment directory
+    if (not config.DEBUG and not pathlib.Path(
+            config.EXPERIMENT_DIR).exists()):
+        pathlib.Path(config.EXPERIMENT_DIR).mkdir(parents=True)
+    # Create trainer
     if any(t == config.EXPERIMENT_TYPE for t in ('V-Net', 'M-Net')):
+        if not config.DEBUG:
+            wandb.login(key=config.WANDB_KEY)
         trainer = LitTrainer(config)
-        wandb.login(key=config.WANDB_KEY)
     elif config.EXPERIMENT_TYPE == 'C-Net':
         trainer = EvolutionTrainer(config)
     else:
-        raise SyntaxError(f'Experiment type {config.EXPERIMENT_TYPE} not supported.')
+        raise SyntaxError('Experiment type '
+                          f'{config.EXPERIMENT_TYPE} not supported.')
+    # Setup
+    trainer.setup()
     # Train!
     trainer.train()
-
 
 if __name__ == '__main__':
     main()
