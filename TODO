@@ -1,0 +1,7 @@
+- Fix V-Net loss function
+
+- Write tests for trainer
+
+- Write C-Net trainer
+
+- Get WandB working
