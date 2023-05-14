@@ -13,6 +13,12 @@ ENV_NAME: "CarRacing-v2"
 # (str) Path to data .hdf5 file.
 DATA: './data/data.hdf5'
 
+# (int) The number of samples in a batch to use for training.
+BATCH_SIZE: 4
+
+# (int) The number of processes to use for loading data.
+N_WORKERS: 0
+
 # (float) The percentage of data used for training.
 TRAIN_VAL_SPLIT: 0.85
 
@@ -40,7 +46,7 @@ N_GAUSSIANS: 5
 # (float) temperature parameter that controls the model uncertainty.
 TEMP: 1.0
 
-WANDB_KEY: '6d00b5ad6447d08639c076c90bccce5ab7191fa0'
+WANDB_KEY: ''
 
 #####################################################################
 #   C-Net Settings
