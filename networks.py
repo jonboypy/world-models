@@ -60,6 +60,7 @@ class Vnet(Network):
             self.sigma_flatten = torch.nn.Flatten()
             self.fv2sigma = torch.nn.Linear(1024, N_z)
             self.gaussian = torch.distributions.Normal(0, 1)
+            self.register_buffer('dummy', torch.empty(0))
 
         def forward(self, x: torch.Tensor) -> torch.Tensor:
             x = self.conv1(x)
@@ -74,7 +75,8 @@ class Vnet(Network):
             mu = self.fv2mu(fv)
             fv = self.sigma_flatten(x)
             sigma = self.fv2sigma(fv)
-            z = mu + sigma * self.gaussian.sample(sigma.size())
+            z = mu + sigma * (self.gaussian.sample(
+                sigma.size()).to(self.dummy.device))
             return z, mu, sigma
 
     class Decoder(Network):
