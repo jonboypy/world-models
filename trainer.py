@@ -3,12 +3,14 @@ import pathlib
 import argparse
 from abc import ABC, abstractmethod
 from typing import Any, List
-import wandb
+import torch
 import pytorch_lightning as pl
+import wandb
 from utils import MasterConfig
 from training_modules import (
     VnetTrainingModule, MnetTrainingModule,
-    CnetTrainingModule, MetricLoggerCallback)
+    CnetTrainingModule, VnetMetricLoggerCallback,
+    MnetMetricLoggerCallback)
 from datasets import DataModule
 
 # Trainers
@@ -60,6 +62,8 @@ class LitTrainer(Trainer):
     def train(self) -> None:
         assert self._is_setup, (
             f'Trainer isnt setup! Call .setup()')
+        if not self.config.EXPERIMENT_TYPE == 'M-Net': #BUG
+            self._training_module = torch.compile(self._training_module)
         self._lit_trainer.fit(self._training_module,
                               self._data_module)
 
@@ -71,26 +75,35 @@ class LitTrainer(Trainer):
         loggers = []
         if not self.config.DEBUG:
             loggers += [pl.loggers.WandbLogger(
+                        project='World-Models',
                         save_dir=self.config.EXPERIMENT_DIR,
-                        name=self.config.EXPERIMENT_NAME,
-                        project='World-Models')]
+                        name=(f'{self.config.EXPERIMENT_TYPE}/'
+                              f'{self.config.EXPERIMENT_NAME}'),
+                        log_model='all')]
             self.exp_dir = (pathlib.Path(loggers[0].save_dir) /
                             loggers[0].name /
                             f'version_{loggers[0].version}')
         return loggers
 
-
     def _get_callbacks(self) -> List[pl.Callback]:
         callbacks = []
         if not self.config.DEBUG:
-            #callbacks += [pl.callbacks.ModelCheckpoint(
-            #        monitor='validation_loss',
-            #        dirpath=(self.exp_dir / 'checkpoints'),
-            #        filename='{epoch:03d}-{validation_loss:.3e}',
-            #        mode='min',
-            #        save_last=True,
-            #        save_top_k=3)]
-            callbacks += [MetricLoggerCallback()]
+            if self.config.EXPERIMENT_TYPE == 'V-Net':
+                callbacks += [pl.callbacks.ModelCheckpoint(
+                        monitor='validation_combined_loss',
+                        filename='{epoch:03d}-{validation_combined_loss:.3e}',
+                        mode='min',
+                        save_last=True,
+                        save_top_k=3)]
+                callbacks += [VnetMetricLoggerCallback()]
+            elif self.config.EXPERIMENT_TYPE == 'M-Net':
+                callbacks += [pl.callbacks.ModelCheckpoint(
+                        monitor='validation_loss',
+                        filename='{epoch:03d}-{validation_loss:.3e}',
+                        mode='min',
+                        save_last=True,
+                        save_top_k=3)]
+                callbacks += [MnetMetricLoggerCallback()]
         return callbacks
 
     def _get_profiler(self) -> Any:
@@ -101,22 +114,40 @@ class LitTrainer(Trainer):
         return datamodule
 
     def _get_training_module(self) -> pl.LightningModule:
-        exp_type = self.config.EXPERIMENT_TYPE
-        if exp_type == 'V-Net':
+        if self.config.EXPERIMENT_TYPE == 'V-Net':
             return VnetTrainingModule(self.config)
-        elif exp_type == 'M-Net':
+        elif self.config.EXPERIMENT_TYPE == 'M-Net':
             return MnetTrainingModule(self.config)
         else:
             raise SyntaxError(
                 f'Experiment type {exp_type} not supported.')
     
     def _get_lit_trainer(self) -> pl.Trainer:
-        return pl.Trainer(max_epochs=self.config.EPOCHS,
-                          precision=16,
-                          logger=self._loggers,
-                          callbacks=self._callbacks,
-                          profiler=self._profiler,
-                          fast_dev_run=self.config.DEBUG)
+        if self.config.EXPERIMENT_TYPE == 'V-Net':
+            return pl.Trainer(max_epochs=self.config.EPOCHS,
+                              precision=16,
+                              logger=self._loggers,
+                              callbacks=self._callbacks,
+                              profiler=self._profiler,
+                              fast_dev_run=self.config.DEBUG,
+                              benchmark=True,
+                              num_sanity_val_steps=0,
+                              gradient_clip_algorithm=(
+                                'value' if self.config.GRADIENT_CLIP else None),
+                              gradient_clip_val=self.config.GRADIENT_CLIP,
+                              val_check_interval=(0.1))
+        elif self.config.EXPERIMENT_TYPE == 'M-Net':
+            return pl.Trainer(max_epochs=self.config.EPOCHS,
+                              precision=16,
+                              logger=self._loggers,
+                              callbacks=self._callbacks,
+                              profiler=self._profiler,
+                              fast_dev_run=self.config.DEBUG,
+                              benchmark=True,
+                              gradient_clip_algorithm=(
+                                'value' if self.config.GRADIENT_CLIP else None),
+                              gradient_clip_val=self.config.GRADIENT_CLIP,
+                              num_sanity_val_steps=0)
 
 class EvolutionTrainer(Trainer):
 
@@ -139,7 +170,6 @@ args = parser.parse_args()
 def main() -> None:
     # Create config object
     config = MasterConfig.from_yaml(args.config)
-
     # Set debugging options
     if args.debug:
         config.DEBUG = True
@@ -153,6 +183,7 @@ def main() -> None:
     if any(t == config.EXPERIMENT_TYPE for t in ('V-Net', 'M-Net')):
         if not config.DEBUG:
             wandb.login(key=config.WANDB_KEY)
+            del config.WANDB_KEY
         trainer = LitTrainer(config)
     elif config.EXPERIMENT_TYPE == 'C-Net':
         trainer = EvolutionTrainer(config)
