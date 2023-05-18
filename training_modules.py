@@ -2,6 +2,7 @@
 from typing import Any, Tuple
 from abc import abstractmethod
 import torch
+import torchvision
 import pytorch_lightning as pl
 import ray
 from tqdm import tqdm
@@ -22,6 +23,7 @@ class TrainingModule(pl.LightningModule):
     def __init__(self, config: MasterConfig) -> None:
         super().__init__()
         self.config = config
+        self.save_hyperparameters(self.config)
 
     @abstractmethod
     def configure_optimizers(self) -> torch.optim.Optimizer:
@@ -64,22 +66,31 @@ class VnetTrainingModule(TrainingModule):
         kld_loss = torch.mean(-0.5 * torch.sum(
             1 + sigma - mu ** 2 - sigma.exp(),
             dim = 1), dim = 0)
-        loss = reconstruction_loss + kld_loss
-        return loss
+        combined_loss = reconstruction_loss + kld_loss
+        return combined_loss, reconstruction_loss, kld_loss
 
     def training_step(self, batch: torch.Tensor,
                       batch_idx: int) -> torch.Tensor:
         reconstructed, _, mu, sigma = self.net(batch)
-        loss = self.loss_function(
+        (loss, reconstrution_loss,
+         kld_loss) = self.loss_function(
             batch, reconstructed, mu, sigma)
-        return loss
+        result = {'loss': loss,
+                  'reconstruction_loss': reconstrution_loss,
+                  'kld_loss': kld_loss}
+        return result
     
     def validation_step(self, batch: torch.Tensor,
                         batch_idx: int) -> torch.Tensor:
         reconstructed, _, mu, sigma = self.net(batch)
-        loss = self.loss_function(
+        (loss, reconstruction_loss,
+         kld_loss) = self.loss_function(
             batch, reconstructed, mu, sigma)
-        return loss
+        result = {'reconstructed': reconstructed,
+                  'loss': loss,
+                  'reconstruction_loss': reconstruction_loss,
+                  'kld_loss': kld_loss}
+        return result
 
 class MnetTrainingModule(TrainingModule):
     """
@@ -101,7 +112,7 @@ class MnetTrainingModule(TrainingModule):
         # negative log probability
         #TODO: might need more sophisticated
         #       form of liklihood calculation
-        return -z_next_est_dist.log_prob(z_next)
+        return -z_next_est_dist.log_prob(z_next).mean()
 
     def training_step(self, batch: torch.Tensor,
                       batch_idx: int) -> torch.Tensor:
@@ -109,7 +120,8 @@ class MnetTrainingModule(TrainingModule):
         z_prev, a_prev, z_next = batch
         z_next_est_dist, _ = self.net(z_prev, a_prev)
         loss = self.loss_function(z_next_est_dist, z_next)
-        return loss
+        result = {'loss': loss}
+        return result
 
     def validation_step(self, batch: torch.Tensor,
                         batch_idx: int) -> torch.Tensor:
@@ -117,7 +129,8 @@ class MnetTrainingModule(TrainingModule):
         z_prev, a_prev, z_next = batch
         z_next_est_dist, _ = self.net(z_prev, a_prev)
         loss = self.loss_function(z_next_est_dist, z_next)
-        return loss
+        result = {'loss': loss}
+        return result
 
 class CnetTrainingModule:
 
@@ -245,16 +258,65 @@ class CnetTrainingModule:
         return agent.avg_cum_reward
 
 # Callbacks
-class MetricLoggerCallback(pl.Callback):
+class VnetMetricLoggerCallback(pl.Callback):
 
     """
-    Simple callback to log training & validation losses.
-    Assumes training/validation step returns a torch.Tensor
-    of the calculated loss
+    Simple callback to log training & validation losses for W&B.
     """
 
     def __init__(self) -> None:
         super().__init__()
+
+    def on_fit_start(self, trainer: pl.Trainer,
+                     pl_module: pl.LightningModule) -> None:
+        pl_module.logger.watch(pl_module, log="all")
+
+    def on_train_batch_end(self, trainer: pl.Trainer,
+                           pl_module: pl.LightningModule,
+                           outputs: torch.Tensor, batch: Any,
+                           batch_idx: int) -> None:
+        pl_module.log('training_combined_loss', outputs['loss'])
+        pl_module.log('training_reconstruction_loss',
+                      outputs['reconstruction_loss'])
+        pl_module.log('training_kld_loss', outputs['kld_loss'])
+
+
+    def on_validation_batch_end(self, trainer: pl.Trainer,
+                                pl_module: pl.LightningModule,
+                                outputs: torch.Tensor, batch: Any,
+                                batch_idx: int, dataloader_idx: int = 0) -> None:
+        # Log loss
+        pl_module.log('validation_combined_loss', outputs['loss'])
+        pl_module.log('validation_reconstruction_loss',
+                      outputs['reconstruction_loss'])
+        pl_module.log('validation_kld_loss', outputs['kld_loss'])
+        # Convert tensors to images
+        original = (batch[0] * 255.).to(
+            dtype=torch.uint8, device='cpu')
+        original = torchvision.transforms.functional.to_pil_image(
+                                                            original)
+        reconstructed = (outputs['reconstructed'][0] * 255.).to(
+                                dtype=torch.uint8, device='cpu')
+        reconstructed = torchvision.transforms.functional.to_pil_image(
+                                                            reconstructed)
+        # Log images
+        pl_module.logger.log_image(
+            key=(f"Original vs. Reconstructed Image Comparison"),
+            images=[original, reconstructed],
+            caption=["Original", "Reconstructed"])
+
+class MnetMetricLoggerCallback(pl.Callback):
+
+    """
+    Simple callback to log training & validation losses for W&B.
+    """
+
+    def __init__(self) -> None:
+        super().__init__()
+
+    def on_fit_start(self, trainer: pl.Trainer,
+                     pl_module: pl.LightningModule) -> None:
+        pl_module.logger.watch(pl_module, log="all")
 
     def on_train_batch_end(self, trainer: pl.Trainer,
                            pl_module: pl.LightningModule,
@@ -266,4 +328,4 @@ class MetricLoggerCallback(pl.Callback):
                                 pl_module: pl.LightningModule,
                                 outputs: torch.Tensor, batch: Any,
                                 batch_idx: int, dataloader_idx: int = 0) -> None:
-        pl_module.log('validation_loss', outputs)
+        pl_module.log('validation_loss', outputs['loss'])
