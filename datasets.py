@@ -87,121 +87,92 @@ class MnetDataset(Dataset):
         self._setup()
 
     def __len__(self) -> int:
-        return self._len
+        return len(self._hf)
 
     def __getitem__(self, idx: int) -> torch.Tensor:
-        # get episode number and step number from index
-        eps, step = self._idx_2_eps_step(idx)
+        # Index corresponds to episode number
+        eps = idx
         # get data from dataset
-        mu = self._hf[str(eps)]['latent_means'][step]
-        sigma = self._hf[str(eps)]['latent_stds'][step]
-        action = self._hf[str(eps)]['actions'][step]
-        # get distribution of *next* latent vector
-        next_mu = self._hf[str(eps)]['latent_means'][step + 1]
-        next_sigma = self._hf[str(eps)]['latent_stds'][step + 1]
+        mus = np.array(self._hf[str(eps)]['latent_means'])
+        sigmas = np.array(self._hf[str(eps)]['latent_stds'])
+        actions = np.array(self._hf[str(eps)]['actions'])
         # preprocess data
-        (mu, sigma, action,
-         next_mu, next_sigma) = self.preprocess(mu, sigma, action,
-                                                 next_mu, next_sigma)
+        (mus, sigmas, actions) = self.preprocess(mus, sigmas, actions)
         # sample latent vectors from distribution parameters
         #   *this helps prevent overfitting*
-        z = mu + sigma * self._gaussian.sample(sigma.size())
-        next_z = next_mu + next_sigma * self._gaussian.sample(sigma.size())
-        return z, action, next_z
+        z_vecs = mus + sigmas * torch.randn_like(sigmas)
+        z_prev = z_vecs[:-1]
+        a_prev = actions[:-1]
+        z_next = z_vecs[1:]
+        return z_prev, a_prev, z_next
 
     @classmethod
-    def preprocess(cls, mu: np.ndarray, sigma: np.ndarray,
-                   action: np.ndarray, next_mu: np.ndarray,
-                   next_sigma: np.ndarray) -> torch.Tensor:
+    def preprocess(cls, mus: np.ndarray, sigmas: np.ndarray,
+                   actions: np.ndarray) -> Tuple[torch.Tensor]:
         # convert all to torch tensors
-        mu = torch.tensor(mu, dtype=torch.float32)
-        sigma = torch.tensor(sigma, dtype=torch.float32)
-        action = torch.tensor(action, dtype=torch.float32)
-        next_mu = torch.tensor(next_mu, dtype=torch.float32)
-        next_sigma = torch.tensor(next_sigma, dtype=torch.float32)
-        return mu, sigma, action, next_mu, next_sigma
-
-    def _idx_2_eps_step(self, idx: int) -> Tuple[int]:
-        for idx_range, eps in self._idx_dict.items():
-            st, end = idx_range
-            if idx >= st and idx < end:
-                step = idx - st
-                return eps, step
+        mus = torch.tensor(mus, dtype=torch.float32)
+        sigmas = torch.tensor(sigmas, dtype=torch.float32)
+        actions = torch.tensor(actions, dtype=torch.float32)
+        return mus, sigmas, actions
 
     def __del__(self) -> None:
         self._hf.close()
-        shutil.rmtree(self._hf_dir)
 
     def _setup(self) -> None:
-        # create Gaussian distribution for
-        #   sampling latent vectors
-        self._gaussian = torch.distributions.Normal(0, 1)
-        # Load encoder
-        #   if in 'test' mode, don't try to load a checkpoint
-        if hasattr(self, 'TEST'):
-            vnet_encoder = VnetTrainingModule(
-                            self.config).net.encoder
-        # else load encoder checkpoint
-        else:
-            vnet_encoder = \
-                VnetTrainingModule.load_from_checkpoint(
-                self.config.VNET_CKPT, config=self.config).net.encoder
-        vnet_encoder.eval()
         # load HDF5
         self._hf = h5py.File(self.config.DATA, 'r')
-        # generate tmp encoded dataset
-        self._generate_encoded_dataset(vnet_encoder)
+        if self.config.CREATE_LATENT_DATASET:
+            # Load encoder
+            #   if in 'test' mode, don't try to load a checkpoint
+            if hasattr(self, 'UNITTEST'):
+                vnet_encoder = VnetTrainingModule(
+                                self.config).net.encoder
+            # else load encoder checkpoint
+            else:
+                vnet_encoder = \
+                    VnetTrainingModule.load_from_checkpoint(
+                    self.config.VNET_CKPT, config=self.config).net.encoder
+            vnet_encoder.eval()
+            # generate encoded dataset
+            self._generate_encoded_dataset(vnet_encoder)
 
     @torch.no_grad()
     def _generate_encoded_dataset(self, vnet_encoder: torch.nn.Module) -> None:
-        # Create tmp directory for Z distributions
-        z_hf_path = Path('/tmp') / \
+        # Get encoder network device
+        device = next(vnet_encoder.parameters()).device
+        # Create path & filename for dataset
+        z_hf_path = Path(self.config.DATA).parent / \
             (str(Path(self.config.DATA).stem)
-                + '_Z_distributions')
+                + '_Z-distributions' + '.hdf5')
         if z_hf_path.exists():
-            shutil.rmtree(z_hf_path)
-        z_hf_path.mkdir()
-        # Create tmp dataset for Z distributions
-        z_hf = h5py.File(z_hf_path / \
-            (z_hf_path.stem + '.hdf5'), 'a')
-        self._len = 0
-        self._idx_dict = {} # {(start_idx, end_idx): episode #}
+            z_hf_path.unlink()
+        # Create dataset for Z distributions
+        z_hf = h5py.File(z_hf_path, 'a')
         # for each episode...
         for eps, ds in tqdm(self._hf.items(),
                 desc='Generating observation encodings'):
-            eps_st = self._len
             group = z_hf.create_group(eps)
-            means, sigmas = [], []
-            # for each timestep..
-            for obs in ds['observations']:
-                # preprocess frame for encoder
-                obs = VnetDataset.preprocess(obs)
-                obs = obs.unsqueeze(0)
-                # calculate mu & sigma from V-Net encoder
-                _, mu, sigma = vnet_encoder(obs)
-                mu, sigma = mu.squeeze(0), sigma.squeeze(0)
-                # add to lists
-                means.append(mu.cpu().numpy())
-                sigmas.append(sigma.cpu().numpy())
-            # convert lists to arrays
-            means = np.array(means, dtype=np.float32)
-            sigmas = np.array(sigmas, dtype=np.float32)
+            obs = np.array(ds['observations'])
+            # preprocess frame for encoder
+            obs = torch.tensor(obs, dtype=torch.float32,
+                                device=device)
+            # scale all pixels to the range [0,1]
+            obs = obs / 255.
+            # permute dimensions to (N,C,H,W)
+            obs = obs.permute(0,3,1,2)
+            # calculate mu & sigma from V-Net encoder
+            _, means, sigmas = vnet_encoder(obs)
+            # convert to numpy arrays
+            means = np.array(means.cpu(), dtype=np.float32)
+            sigmas = np.array(sigmas.cpu(), dtype=np.float32)
             # add to HDF5
-            _ = group.create_dataset('latent_means', data=means)
-            _ = group.create_dataset('latent_stds', data=sigmas)
-            _ = group.create_dataset('actions', data=ds['actions'])
-            # update length of dataset.
-            #   (len - 1) b/c last Z has no next Z
-            self._len += len(ds['observations']) - 1
-            # record index of episode end
-            eps_end = self._len
-            # record mapping from indicies to episode number
-            self._idx_dict[(eps_st, eps_end)] = int(eps)
+            group.create_dataset('latent_means', data=means)
+            group.create_dataset('latent_stds', data=sigmas)
+            group.create_dataset('actions', data=ds['actions'])
         # close dataset with images
         self._hf.close()
-        # update dataset to Z distribution dataset
+        # re-assign _hf to latent encodings dataset
         self._hf = z_hf
-        self._hf_dir = z_hf_path
 
 # Data Module
 class DataModule(pl.LightningDataModule):
@@ -239,7 +210,7 @@ class DataModule(pl.LightningDataModule):
     def val_dataloader(self) -> torch.utils.data.DataLoader:
         return torch.utils.data.DataLoader(
             self.val_ds, batch_size=self.config.BATCH_SIZE,
-            shuffle=True, num_workers=self.config.N_WORKERS)
+            shuffle=False, num_workers=self.config.N_WORKERS)
     
     def _train_val_split(self, dataset: torch.utils.data.Dataset
                          ) -> Tuple[torch.utils.data.Dataset]:
