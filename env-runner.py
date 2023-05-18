@@ -55,6 +55,7 @@ parser.add_argument('--collect-data', action='store_true',
                     help='Flag to run data collection procedure.')
 parser.add_argument('--collection-steps',
                     help='Specify # of steps to run data collection for.',
+                    type=int,
                     default=2000)
 parser.add_argument('--collection-name',
                     help='Specify name for data collection.',
