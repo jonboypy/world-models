@@ -1,35 +1,41 @@
 # (str) Identification of the experiments.
-EXPERIMENT_NAME: 'test'
+EXPERIMENT_NAME: 'test1'
 
 # (str) Directory to save experiments result.
 EXPERIMENT_DIR: './experiments'
 
 # (str) The type of experiment to run (choices: 'V-Net', 'M-Net', 'C-Net')
-EXPERIMENT_TYPE: 'V-Net'
+EXPERIMENT_TYPE: 'M-Net'
 
-# (str) Name of environment (supported: "CarRacing-v1")
+# (str) Name of environment (supported: "CarRacing-v2")
 ENV_NAME: "CarRacing-v2"
 
 # (str) Path to data .hdf5 file.
-DATA: './data/data.hdf5'
+DATA: '/world-models/data/full-dataset-v1_Z-distributions.hdf5'
 
 # (int) The number of samples in a batch to use for training.
-BATCH_SIZE: 4
+BATCH_SIZE: 128
 
 # (int) The number of processes to use for loading data.
-N_WORKERS: 0
+N_WORKERS: 8
 
 # (float) The percentage of data used for training.
-TRAIN_VAL_SPLIT: 0.85
+TRAIN_VAL_SPLIT: 0.999
+
+# (bool) When true, creates a latent encoding dataset. Expects DATA to point to a image dataset for encoding.
+CREATE_LATENT_DATASET: False
 
 # (int) The number of epochs/generations to optimize for.
-EPOCHS: 4
+EPOCHS: 20
 
 # (int) RNG seed.
 RNG_SEED: 314
 
 # (float) The learning rate of the optimizer.
-LR: 0.0003
+LR: 0.0001
+
+# (float) A value to clip gradients at
+GRADIENT_CLIP: 1.0
 
 # (int) The size of the latent vector Z.
 Z_SIZE: 32
@@ -46,7 +52,8 @@ N_GAUSSIANS: 5
 # (float) temperature parameter that controls the model uncertainty.
 TEMP: 1.0
 
-WANDB_KEY: ''
+# (str) API key to Weights & Biases
+WANDB_KEY: '6d00b5ad6447d08639c076c90bccce5ab7191fa0'
 
 #####################################################################
 #   C-Net Settings
@@ -59,7 +66,7 @@ POP_SIZE: 64
 TOP_PERCENTAGE: 0.25
 
 # (str) Path to a vision network checkpoint file.
-VNET_CKPT: ''
+VNET_CKPT: '/world-models/experiments/World-Models/neoy0j00/checkpoints/epoch=000-validation_combined_loss=2.509e-04.ckpt'
 
 # (str) Path to a memory network checkpoint file.
 MNET_CKPT: ''
