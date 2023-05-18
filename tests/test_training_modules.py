@@ -20,15 +20,15 @@ class TestVnetTrainingModule(unittest.TestCase):
         mu = torch.zeros(1, self.config.Z_SIZE)
         sigma = torch.ones(1, self.config.Z_SIZE).log()
         loss = func(img, img, mu, sigma)
-        self.assertEquals(loss.item(), 0.0)
+        self.assertEquals(loss[0].item(), 0.0)
     
     def test_training_step(self) -> None:
         image = torch.rand(1,3,64,64)
-        loss = self.training_module.training_step(image)
+        loss = self.training_module.training_step(image, 0)
 
     def test_validation_step(self) -> None:
         image = torch.rand(1,3,64,64)
-        loss = self.training_module.validation_step(image)
+        loss = self.training_module.validation_step(image, 0)
 
 class TestMnetTrainingModule(unittest.TestCase):
 
@@ -54,14 +54,14 @@ class TestMnetTrainingModule(unittest.TestCase):
         a_prev = torch.rand(1,1,3)
         z_next = torch.rand_like(z_prev)
         batch = (z_prev, a_prev, z_next)
-        loss = self.training_module.training_step(batch)
+        loss = self.training_module.training_step(batch, 0)
 
     def test_validation_step(self) -> None:
         z_prev = torch.rand(1,1,self.config.Z_SIZE)
         a_prev = torch.rand(1,1,3)
         z_next = torch.rand_like(z_prev)
         batch = (z_prev, a_prev, z_next)
-        loss = self.training_module.validation_step(batch)
+        loss = self.training_module.validation_step(batch, 0)
 
 class TestCnetTrainingModule(unittest.TestCase):
 
