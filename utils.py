@@ -25,6 +25,7 @@ class MasterConfig(dotdict):
     def from_yaml(config_path: Path):
         with open(config_path) as f:
             config_dict = yaml.load(f, Loader=yaml.FullLoader)
+        recursive_dotdictify(config_dict)
         cfg = MasterConfig(config_dict)
         cfg.check_config()
         return cfg
@@ -35,6 +36,14 @@ class MasterConfig(dotdict):
                 raise ConfigurationError(
                     f"configuration must contain {attr}")
 
+def recursive_dotdictify(d):
+    if isinstance(d, dict):
+        for k,v in d.items():
+            v = recursive_dotdictify(v)
+            d[k] = v
+        return dotdict(d)
+    else:
+        return d
 
 class ConfigurationError(Exception):
     pass
