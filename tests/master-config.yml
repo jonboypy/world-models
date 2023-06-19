@@ -11,7 +11,7 @@ EXPERIMENT_TYPE: 'V-Net'
 ENV_NAME: "CarRacing-v2"
 
 # (str) Path to data .hdf5 file.
-DATA: './data/data.hdf5'
+DATA: './data/small-dataset.hdf5'
 
 # (float) The percentage of data used for training.
 TRAIN_VAL_SPLIT: 0.85

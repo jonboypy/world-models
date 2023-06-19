@@ -79,17 +79,24 @@ class WorldModelGymAgent(Agent):
         self.vnet_encoder = vnet_encoder
         self.mnet = mnet
         self.cnet = cnet
-        self.device = next(cnet.parameters()).device
-        # Assert all networks are on the same device
-        assert(self.device ==
-            next(vnet_encoder.parameters()).device)
-        assert(self.device == next(mnet.parameters()).device)
+        if env.gym.unwrapped.spec.id == "CarRacing-v2":
+            self._preprocess_obs = self._preprocess_car_racing_obs
+        else: raise NotImplementedError(
+                'WorldModelGymAgent does not currently support '
+                f'{env.gym.unwrapped.spec.id}.')
+        self.cnet_device = next(cnet.parameters()).device
+        self.world_model_device = next(vnet_encoder.parameters()).device
+        assert(self.world_model_device ==
+            next(mnet.parameters()).device)
         # Create initial hidden vector
-        self.hx = (torch.zeros(1, 1, self.mnet.config.HX_SIZE),
-                    torch.zeros(1, 1, self.mnet.config.HX_SIZE))
+        self.hx = (torch.zeros(1, 1, self.mnet.config.HX_SIZE,
+                               device=self.world_model_device),
+                    torch.zeros(1, 1, self.mnet.config.HX_SIZE,
+                                device=self.world_model_device))
         # Create initial previous action
         self.a_prev = torch.zeros(
-            1, 1, self.mnet.config.ACTION_SPACE_SIZE)
+            1, 1, self.mnet.config.ACTION_SPACE_SIZE,
+            device=self.world_model_device)
     
     @torch.no_grad()
     @Plugin.hookable
@@ -106,22 +113,28 @@ class WorldModelGymAgent(Agent):
                         self.hx, self.a_prev)
         # Concatenate z & h
         zh = torch.cat([z.view(1, 1, -1), h], -1).view(1, -1)
+        # Move to C-Net device
+        zh = zh.to(self.cnet_device)
         # Feed the latent vector and hidden vector
         #   to the controller network
         action = self.cnet(zh)
         # update previous action
-        self.a_prev = action.view(1, 1, -1)
+        self.a_prev = action.view(
+            1, 1, -1).to(self.world_model_device)
         return action.view(-1).cpu().numpy()
     
-    def _preprocess_obs(self, obs: np.ndarray) -> torch.Tensor:
-        # Resize observaion
+    def _preprocess_car_racing_obs(self, obs: np.ndarray) -> torch.Tensor:
+        # Crop observation
         obs = Image.fromarray(obs)
+        obs = obs.crop((0,0,96,83))
+        # Resize observaion
         obs = obs.resize((64, 64))
         obs = np.array(obs)
         # convert numpy uint8 arr to torch 32-bit float tensor
-        obs = torch.tensor(obs, dtype=torch.float32)
+        obs = torch.tensor(obs, dtype=torch.float32,
+                           device=self.world_model_device)
         # scale all pixels to the range [0,1]
         obs = obs / 255.
         # permute dims to Torch standard (C,H,W)
         obs = obs.permute(2, 0, 1)
-        return obs 
+        return obs

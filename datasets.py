@@ -2,7 +2,6 @@
 from abc import abstractmethod
 from pathlib import Path
 from typing import Tuple, Optional, Union
-import shutil
 from tqdm import tqdm
 import torch
 import numpy as np
@@ -100,7 +99,7 @@ class MnetDataset(Dataset):
         (mus, sigmas, actions) = self.preprocess(mus, sigmas, actions)
         # sample latent vectors from distribution parameters
         #   *this helps prevent overfitting*
-        z_vecs = mus + sigmas * torch.randn_like(sigmas)
+        z_vecs = mus + torch.exp(sigmas * 0.5) * torch.randn_like(sigmas)
         z_prev = z_vecs[:-1]
         a_prev = actions[:-1]
         z_next = z_vecs[1:]

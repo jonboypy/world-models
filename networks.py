@@ -18,6 +18,38 @@ class Network(torch.nn.Module):
         super().__init__()
         self.config = config
 
+    def initialize_parameters(self, init_type: str) -> None:
+        """
+        Initializes model parameters.
+        """
+        # Init funcs.
+        def normal_init(m):
+            if isinstance(m, (
+                torch.nn.Conv2d,
+                torch.nn.ConvTranspose2d,
+                torch.nn.Linear)):
+                torch.nn.init.normal_(m.weight.data, 0., 0.02)
+                if m.bias is not None:
+                    m.bias.data.zero_()
+
+        def kaiming_init(m):
+            if isinstance(m, (
+                torch.nn.Conv2d,
+                torch.nn.ConvTranspose2d,
+                torch.nn.Linear)):
+                torch.nn.init.kaiming_normal_(
+                    m.weight.data, nonlinearity='relu')
+                if m.bias is not None:
+                    m.bias.data.zero_()
+        # Apply
+        if init_type == 'normal':
+            init_fx = normal_init
+        elif init_type == 'kaiming':
+            init_fx = kaiming_init
+        else:
+            raise SyntaxError(
+                f'init type {init_type} not supported.')
+        self.apply(init_fx)
 
 class Vnet(Network):
 
@@ -73,7 +105,9 @@ class Vnet(Network):
             mu = self.fv2mu(fv)
             fv = self.sigma_flatten(x)
             sigma = self.fv2sigma(fv)
-            z = mu + sigma * torch.randn_like(sigma)
+            # reparameterization trick
+            std = torch.exp(sigma * 0.5)
+            z = mu + std * torch.randn_like(std)
             return z, mu, sigma # sigma -> log-variance
 
     class Decoder(Network):
@@ -126,7 +160,7 @@ class Mnet(Network):
     def forward(self, z: torch.Tensor,
                 a_prev: torch.Tensor) -> Tuple[
                 torch.distributions.MixtureSameFamily, torch.Tensor]:
-        # Dims: (S,B,Z), (S,B,A)
+        # Dims: (Batch, Sequence, *)
         # Concatenate the latent vector & previous action
         za = torch.cat([z, a_prev], -1)
         # Compute LSTM
@@ -141,7 +175,7 @@ class Mnet(Network):
                 h_prev: Tuple[torch.Tensor],
                 a_prev: torch.Tensor) -> Tuple[
                 torch.distributions.MixtureSameFamily, torch.Tensor]:
-        # Dims: (S,B,Z), (S,B,A)
+        # Dims: (Batch, Sequence, *)
         # Concatenate the previous latent vector & previous action
         za = torch.cat([z, a_prev], -1)
         # Compute LSTM
@@ -167,7 +201,7 @@ class Mnet(Network):
             # Action-space size
             N_a = config.ACTION_SPACE_SIZE
             # Create LSTM
-            self.net = torch.nn.LSTM(N_z + N_a, N_h)
+            self.net = torch.nn.LSTM(N_z + N_a, N_h, batch_first=True)
 
         def forward(self, x: torch.Tensor) -> Tuple[torch.Tensor]:
             # Compute LSTM & return output
@@ -210,6 +244,9 @@ class Mnet(Network):
             pi = self.pi(x)
             # Apply softmax (so pi sums to 1)
             pi = self.pi_softmax(pi)
+            #BUG: gumbel softmax goes to nan sometimes.
+            #pi = torch.nn.functional.gumbel_softmax(
+            #    pi, tau=self.config.TEMP, dim=-1) #TODO: is this right for temperature?
             # Calculate mean vectors for each Gaussian
             mu = self.mu(x)
             # Calculate variance vectors for each Gaussian
@@ -246,10 +283,21 @@ class Cnet(Network):
         #   gradient free optimzation :-)
         self.l1.weight.requires_grad = False
         self.l1.bias.requires_grad = False
-        # Sigmoid activation function for output
-        self.sigmoid1 = torch.nn.Sigmoid()
+        # Create action-space scaling func. for output
+        if config.ENV_NAME == "CarRacing-v2":
+            self.scale_2_action_space = \
+                self._2_car_racing_action_space
+        else: raise NotImplementedError(
+                'Cnet does not currently support '
+                f'{config.ENV_NAME}')
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         x = self.l1(x)
-        y = self.sigmoid1(x)
+        y = self.scale_2_action_space(x)
         return y
+    
+    def _2_car_racing_action_space(
+            self, action: torch.Tensor) -> torch.Tensor:
+        action[0] = torch.nn.functional.tanh(action[0])
+        action[1:] = torch.nn.functional.sigmoid(action[1:])
+        return action

@@ -6,7 +6,10 @@ import functools
 from abc import ABC
 from PIL import Image
 import numpy as np
+import torch
 import h5py
+import wandb
+from utils import MasterConfig
 
 
 class Plugin(ABC):
@@ -85,9 +88,13 @@ class DataRecorder(Plugin):
                  as_hdf5: bool = False) -> None:
         super().__init__()
         self.save_dir = save_dir
-        if save_dir.exists():
-            shutil.rmtree(save_dir)
-        save_dir.mkdir(parents=True)
+        if as_hdf5:
+            if (save_dir/f'{name}.hdf5').exists():
+                (save_dir/f'{name}.hdf5').unlink()
+        else:
+            if save_dir.exists():
+                shutil.rmtree(save_dir)
+                save_dir.mkdir(parents=True)
         self.eps = -1
         self.step = 0
         self.eps_data = {}
@@ -154,5 +161,62 @@ class DataRecorder(Plugin):
 
     def _preprocess(self, obs: np.ndarray) -> Image.Image:
         img = Image.fromarray(obs)
+        img = img.crop((0,0,96,83))
         img = img.resize((64, 64))
         return img
+
+
+class CNetWandbLogger(Plugin):
+
+    """
+    Plugin to log C-Net training metrics to WandB.
+    """
+
+    def __init__(self, config: MasterConfig) -> None:
+        super().__init__()
+        self.run = wandb.init(
+            project="World-Models",
+            config=config,
+            dir=config.EXPERIMENT_DIR,
+            name=(f'{config.EXPERIMENT_TYPE}/'
+                  f'{config.EXPERIMENT_NAME}')
+            )
+
+    def pre_log(self, name: str, metric: Any,
+                plot_type: str, step: int) -> None:
+        if plot_type == 'line':
+            wandb.log({name: metric}, step)
+        elif plot_type == 'histogram':
+            wandb.log({name: wandb.Histogram(metric)}, step)
+        elif plot_type == 'video':
+            wandb.log(
+                {name: wandb.Video(
+                    metric, fps=30, format='mp4')}, step)
+        else:
+            raise NotImplementedError(
+                f'Plot type {plot_type} not supported.')
+
+class CNetModelCheckpoint(Plugin):
+
+    """
+    Plugin to save C-Net models.
+    """
+
+    def __init__(self, save_dir: Path) -> None:
+        super().__init__()
+        if not save_dir.exists():
+            save_dir.mkdir(parents=True)
+        self.save_dir = str(save_dir)
+        self.previous_best = None
+        self.previous_ckpt = None
+
+    def pre_save(self, model: torch.nn.Module,
+                 filename: str, metric: float) -> None:
+        if self.previous_best is None:
+            self.previous_best = metric
+        elif self.previous_best < metric:
+            for ckpt in Path(self.save_dir).iterdir():
+                ckpt.unlink()
+            self.previous_best = metric
+        torch.save({'model_state_dict': model.state_dict()},
+                   self.save_dir+'/'+filename)

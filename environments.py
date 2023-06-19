@@ -37,9 +37,25 @@ class GymEnvironment(Environment):
     """
 
     def __init__(self, config: MasterConfig = None,
-                 plugins: List[Plugin] = None) -> None:
+                 plugins: List[Plugin] = None,
+                 record_video: bool = False,
+                 video_name: str = None) -> None:
         super().__init__(config, plugins)
-        self.gym = gym.make(config.ENV_NAME)
+        if record_video:
+            self.gym = gym.make(config.ENV_NAME,
+                                render_mode="rgb_array")
+            self.gym = gym.wrappers.RecordVideo(
+                self.gym, self.config.EXPERIMENT_DIR,
+                episode_trigger=\
+                    lambda e: e < self.config.TEST_N_ROLLOUTS,
+                name_prefix=video_name,
+                disable_logger=True)
+        else:
+            self.gym = gym.make(config.ENV_NAME)
+
+    def __del__(self) -> None:
+        if hasattr(self, 'gym'):
+            self.gym.close()
 
     @Plugin.hookable
     def reset(self) -> np.ndarray:

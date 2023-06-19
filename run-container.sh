@@ -13,6 +13,7 @@ docker run \
     -v="/etc/passwd:/etc/passwd:ro" \
     -v="/etc/shadow:/etc/shadow:ro" \
     -v="/etc/sudoers:/etc/sudoers:ro" \
-    --shm-size=4G \
+    --shm-size=16G \
+    --network=host \
     world-models:latest \
     bash

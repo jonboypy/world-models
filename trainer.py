@@ -6,7 +6,9 @@ from typing import Any, List
 import torch
 import pytorch_lightning as pl
 import wandb
+import ray
 from utils import MasterConfig
+from plugins import Plugin, CNetModelCheckpoint, CNetWandbLogger
 from training_modules import (
     VnetTrainingModule, MnetTrainingModule,
     CnetTrainingModule, VnetMetricLoggerCallback,
@@ -62,7 +64,7 @@ class LitTrainer(Trainer):
     def train(self) -> None:
         assert self._is_setup, (
             f'Trainer isnt setup! Call .setup()')
-        if not self.config.EXPERIMENT_TYPE == 'M-Net': #BUG
+        if not self.config.EXPERIMENT_TYPE == 'M-Net' and not args.debug: #BUG
             self._training_module = torch.compile(self._training_module)
         self._lit_trainer.fit(self._training_module,
                               self._data_module)
@@ -120,7 +122,9 @@ class LitTrainer(Trainer):
             return MnetTrainingModule(self.config)
         else:
             raise SyntaxError(
-                f'Experiment type {exp_type} not supported.')
+                ('Experiment type '
+                 f'{self.config.EXPERIMENT_TYPE} '
+                 'not supported.'))
     
     def _get_lit_trainer(self) -> pl.Trainer:
         if self.config.EXPERIMENT_TYPE == 'V-Net':
@@ -154,10 +158,41 @@ class EvolutionTrainer(Trainer):
     def __init__(self, config: MasterConfig) -> None:
         super().__init__(config)
         self._is_setup = False
-        raise NotImplementedError()
 
     def setup(self) -> None:
+        self._plugins = self._get_plugins()
+        self._training_module = self._get_training_module()
         self._is_setup = True
+
+    def train(self) -> None:
+        assert self._is_setup, (
+            f'Trainer isnt setup! Call .setup()')
+        self._training_module.optimize()
+
+    def test(self) -> None:
+        return super().test()
+
+    def _get_training_module(self) -> CnetTrainingModule:
+        if args.debug:
+            ray.init(local_mode=True)
+        else:
+            ray.init()
+        return CnetTrainingModule(self.config, self._plugins)
+
+    def _get_plugins(self) -> List[Plugin]:
+        plugins = []
+        if not args.debug:
+            # Logger
+            plugins += [CNetWandbLogger(self.config)]
+            # Checkpointing
+            ckpt_dir = (pathlib.Path(self.config.EXPERIMENT_DIR)/
+                        'World-Models'/plugins[0].run.id/'checkpoints')
+            self.config.EXPERIMENT_DIR = str(pathlib.Path(self.config.EXPERIMENT_DIR)/
+                                            'World-Models'/plugins[0].run.id)
+
+            plugins += [CNetModelCheckpoint(ckpt_dir)]
+        return plugins
+
 
 # CLI
 parser = argparse.ArgumentParser(description='Runs training of networks.')
@@ -179,12 +214,13 @@ def main() -> None:
     if (not config.DEBUG and not pathlib.Path(
             config.EXPERIMENT_DIR).exists()):
         pathlib.Path(config.EXPERIMENT_DIR).mkdir(parents=True)
+    # login to WandB
+    if not config.DEBUG:
+        wandb.login(key=config.WANDB_KEY)
+        del config.WANDB_KEY
     # Create trainer
     if any(t == config.EXPERIMENT_TYPE for t in ('V-Net', 'M-Net')):
-        if not config.DEBUG:
-            wandb.login(key=config.WANDB_KEY)
-            del config.WANDB_KEY
-        trainer = LitTrainer(config)
+       trainer = LitTrainer(config)
     elif config.EXPERIMENT_TYPE == 'C-Net':
         trainer = EvolutionTrainer(config)
     else:
