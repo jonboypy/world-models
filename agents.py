@@ -102,8 +102,6 @@ class WorldModelGymAgent(Agent):
     @Plugin.hookable
     def policy(self, obs: np.ndarray) -> np.ndarray:
         # preprocess observaion
-        #TODO: could preprocess the input with hook plugin
-        # to avoid cicular import of using VnetDataset.preprocess()?
         obs = self._preprocess_obs(obs)
         # Encoder observation to latent vector
         z, _, _= self.vnet_encoder(obs.unsqueeze(0))
