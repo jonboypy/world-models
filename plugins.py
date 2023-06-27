@@ -165,7 +165,6 @@ class DataRecorder(Plugin):
         img = img.resize((64, 64))
         return img
 
-
 class CNetWandbLogger(Plugin):
 
     """
@@ -214,9 +213,12 @@ class CNetModelCheckpoint(Plugin):
                  filename: str, metric: float) -> None:
         if self.previous_best is None:
             self.previous_best = metric
+            self.previous_ckpt = self.save_dir+'/'+filename
+            torch.save({'model_state_dict': model.state_dict()},
+                       self.previous_ckpt)
         elif self.previous_best < metric:
-            for ckpt in Path(self.save_dir).iterdir():
-                ckpt.unlink()
+            Path(self.previous_ckpt).unlink()
             self.previous_best = metric
-        torch.save({'model_state_dict': model.state_dict()},
-                   self.save_dir+'/'+filename)
+            self.previous_ckpt = self.save_dir+'/'+filename
+            torch.save({'model_state_dict': model.state_dict()},
+                       self.previous_ckpt)
