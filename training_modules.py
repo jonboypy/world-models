@@ -1,4 +1,4 @@
-# Imports
+# ----------------------------- Imports ------------------------------
 from typing import Any, Tuple, List
 from abc import abstractmethod
 import torch
@@ -6,6 +6,7 @@ import torchvision
 import pytorch_lightning as pl
 import ray
 import numpy as np
+import cma
 from tqdm import tqdm
 from utils import MasterConfig
 from networks import Vnet, Mnet, Cnet
@@ -13,10 +14,13 @@ from environments import GymEnvironment
 from plugins import Plugin
 from agents import WorldModelGymAgent
 
-# Training Modules
+# -------------------------------------------------------------------
+#   Training Modules
+# -------------------------------------------------------------------
+
 class TrainingModule(pl.LightningModule):
     """
-    Base class which all other training modules derive from.
+    Base class which all other *Lightning* training modules derive from.
 
     Args:
         config: Master config object.
@@ -46,6 +50,9 @@ class TrainingModule(pl.LightningModule):
 class VnetTrainingModule(TrainingModule):
     """
     Training module for training the 'V' vision network.
+
+    Args:
+        config: Master config object.
     """
 
     def __init__(self, config: MasterConfig) -> None:
@@ -70,7 +77,6 @@ class VnetTrainingModule(TrainingModule):
         kld_loss = -0.5 * torch.sum(
             1 + sigma - mu.pow(2) - sigma.exp(),
             dim = 1)
-        #kld_loss = torch.maximum(kld_loss, 0.5 * self.config.Z_SIZE).mean()
         kld_loss = kld_loss.mean()
         combined_loss = reconstruction_loss + kld_loss
         return combined_loss, reconstruction_loss, kld_loss
@@ -101,6 +107,9 @@ class VnetTrainingModule(TrainingModule):
 class MnetTrainingModule(TrainingModule):
     """
     Training module for training the 'M' memory network.
+
+    Args:
+        config: Master config object.
     """
     
     def __init__(self, config: MasterConfig) -> None:
@@ -133,7 +142,8 @@ class MnetTrainingModule(TrainingModule):
         z_prev, a_prev, z_next = batch
         z_next_est_dist, _ = self.net(z_prev, a_prev)
         loss = self.loss_function(z_next_est_dist, z_next)
-        result = {'loss': loss}
+        result = {'loss': loss,
+                  'z_next_est_dist': z_next_est_dist}
         return result
 
 class CnetTrainingModule:
@@ -142,16 +152,69 @@ class CnetTrainingModule:
     Module designed for 'Covariance-Matrix
     Adaptation Evolution Strategy' to train the
     'C' controller network.
+
+    Args:
+        config: Master config object.
+        plugins: Plugins to extend module's functions.
     """
 
-    def __init__(self, config: MasterConfig, plugins: List=None) -> None:
+    def __init__(self, config: MasterConfig,
+                 plugins: List=None) -> None:
         self.config = config
         self.pop_size = config.POP_SIZE
-        self.top_percentage = config.TOP_PERCENTAGE
-        self.epochs = config.EPOCHS
+        self.generations = config.EPOCHS
         self.plugins = plugins
-        self._load_modules()
+
+    @Plugin.hookable    
+    def log(self, name: str, metric: Any,
+            plot_type: str, step: int) -> None:
+        # NOTE: For plugin to extend
+        return
+
+    @Plugin.hookable    
+    def save(self, model: torch.nn.Module,
+             filename: str, metric: float) -> None:
+        # NOTE: For plugin to extend
+        return
+
+    def optimize(self) -> None:
+        # Execute initialization
         self._initialize()
+        # For every epoch...
+        for g in tqdm(range(self.generations),
+                       desc='Optimizing', unit='Generation'):
+            # Get new population from algorithm to evaluate
+            population = self.alg.ask()
+            # Evaluate each individual in population
+            scores = self._evaluate_population(population)
+            # Report results to algorithm
+            self.alg.tell(population, -scores)
+            # log progress
+            self.log('Population Average Return', scores.mean(), 'line', g)
+            self.log('Best Average Return', scores.max(), 'line', g)
+            self.log('Worst Average Return', scores.min(), 'line', g)
+            self.log('µ', self.alg.mean, 'histogram', g)
+            self.log('σ', self.alg.C, 'histogram', g)
+            # checkpoint best model
+            self.save(self._params2network(self.alg.result.xbest),
+                f'generation={g}-return={scores.max():.3e}.ckpt', scores.max())
+            # Perform evaluation of top performer to log algorithm progress
+            if (g+1) % self.config.TEST_EVERY_N_GENERATIONS == 0:
+                training_module = ray.put(self)
+                video_name = f'Generation={g}-Return={scores.max():.3e}'
+                score = self._evaluate_individual.remote(
+                    training_module,
+                    self.alg.result.xbest,
+                    self.config.TEST_N_ROLLOUTS,
+                    (True if not self.config.DEBUG else False),
+                    video_name)
+                score = ray.get(score)
+                for i in range(self.config.TEST_N_ROLLOUTS):
+                    self.log(video_name + f'-episode-{i}', 
+                             self.config.EXPERIMENT_DIR + '/' + \
+                                video_name + f'-episode-{i}.mp4',
+                             'video', g)
+                self.log('Test Average Return', score, 'line', g)
 
     def _load_modules(self) -> None:
         self.cnet = Cnet(self.config)
@@ -175,78 +238,20 @@ class CnetTrainingModule:
             p.requires_grad = False
 
     def _initialize(self) -> Tuple[torch.Tensor]:
+        # Load models
+        self._load_modules()
         # Calculate the number of parameters in C-Net
         self.event_space = self.cnet.l1.weight.numel() + \
                             self.cnet.l1.bias.numel()
-        # Initialize random location & covariance matricies
-        mu = torch.rand(self.event_space)
-        sigma = torch.eye(self.event_space) * self.config.INIT_SIGMA
-        return mu, sigma
+        # Initialize algorithm
+        self.alg = cma.CMAEvolutionStrategy(
+            [0]*self.event_space,
+            self.config.INIT_SIGMA,
+            {'popsize': self.config.POP_SIZE}
+        )
 
-    @Plugin.hookable    
-    def log(self, name: str, metric: Any,
-            plot_type: str, step: int) -> None:
-        # NOTE: For plugin to extend
-        return
-
-    @Plugin.hookable    
-    def save(self, model: torch.nn.Module,
-             filename: str, metric: float) -> None:
-        # NOTE: For plugin to extend
-        return
-
-    @Plugin.hookable
-    def optimize(self) -> None:
-        # Get initial mu & sigma
-        mu, sigma = self._initialize()
-        # For every epoch...
-        for e in tqdm(range(self.epochs), desc='Optimizing', unit='Generation'):
-            # log mu & sigma
-            self.log('µ', mu.numpy(), 'histogram', e)
-            self.log('σ', sigma.numpy(), 'histogram', e)
-            # Create a sample space based on the current mu & sigma
-            space = torch.distributions.MultivariateNormal(mu, sigma)
-            # Sample a population of parameters from the space
-            population = space.sample((self.pop_size,))
-            # Evaluate each set of parameters in population
-            scores = self._evaluate_population(population)
-            # Get the top % of the population
-            best = torch.topk(scores, np.ceil(
-                self.pop_size * self.top_percentage).astype(int))
-            # Calculate new covariance matrix
-            var = ((population[best.indices] - mu).pow(2)).mean(0)
-            cov = ((population[best.indices] - mu).prod(1)).mean(0)
-            sigma = (torch.ones(self.event_space, self.event_space)
-                     - torch.eye(self.event_space)) * cov + torch.diag(var)
-            # Enforce sigma to be greater than 0
-            sigma = sigma.clamp(1e-32)
-            # Calculate new mu
-            mu = population[best.indices].mean(0)
-            # log progress
-            self.log('Average Return', best.values.mean(), 'line', e)
-            # checkpoint best model
-            self.save(self._params2network(population[best.indices[0]]),
-                      f'epoch={e}-return={best.values[0]:.3e}.pt', best.values[0])
-            # Perform evaluation of top performer to log algorithm progress
-            if e % self.config.TEST_EVERY_N_EPOCHS == 0:
-                training_module = ray.put(self)
-                video_name = f'Generation={e}-Return={best.values[0]:.3e}'
-                score = self._evaluate_individual.remote(
-                    training_module,
-                    population[best.indices[0]],
-                    self.config.TEST_N_ROLLOUTS,
-                    (True if not self.config.DEBUG else False),
-                    video_name)
-                score = ray.get(score)
-                for i in range(self.config.TEST_N_ROLLOUTS):
-                    self.log(video_name + f'-episode-{i}', 
-                             self.config.EXPERIMENT_DIR + '/' + \
-                                video_name + f'-episode-{i}.mp4',
-                             'video', e)
-                self.log('Test Average Return', score, 'line', e)
-
-    def _evaluate_population(self,
-            population: torch.Tensor) -> torch.Tensor:
+    def _evaluate_population(
+            self, population: np.ndarray) -> np.ndarray:
         # Launch parallel evaluations of each individual in population
         training_module = ray.put(self)
         scores = []
@@ -256,14 +261,17 @@ class CnetTrainingModule:
                     training_module, population[idx],
                     self.config.EVAL_N_ROLLOUTS)]
         scores = ray.get(scores)
-        return torch.tensor(scores)
+        return np.array(scores)
 
-    def _params2network(self, params: torch.Tensor) -> torch.nn.Module:
-        # Load parameters into C-Net
+    def _params2network(
+            self, params: np.ndarray) -> torch.nn.Module:
+        # Load C-Net instance
         cnet = Cnet(self.config)
+        # Convert params to Torch tensor
+        params = torch.from_numpy(params.copy()).float()
         # Reshape params to size of weight matrix (+1 for bias vector)
         params = params.reshape(cnet.l1.weight.size(0),
-                                        cnet.l1.weight.size(1)+1)
+                                cnet.l1.weight.size(1)+1)
         # Load params into net
         cnet.l1.weight = torch.nn.Parameter(params[:,:-1], False)
         cnet.l1.bias = torch.nn.Parameter(params[:,-1], False)
@@ -271,7 +279,7 @@ class CnetTrainingModule:
     
     @ray.remote
     def _evaluate_individual(
-            self, individual: torch.Tensor,
+            self, individual: np.ndarray,
             n_rollouts: int,
             record_video: bool = False,
             video_name: str = None) -> float:
@@ -285,38 +293,22 @@ class CnetTrainingModule:
         else:
             env = GymEnvironment(self.config)
         env.reset()
-        # Move V-Net & M-Net to GPU
-        if 0: #torch.cuda.is_available():
-            self.vnet_encoder = self.vnet_encoder.cuda()
-            self.mnet = self.mnet.cuda()
         # Make agent
         agent = WorldModelGymAgent(env, self.vnet_encoder,
                                    self.mnet, cnet)
         # Run rollouts
         n_eps = 0
-        while n_eps < n_rollouts: #TODO could parallelize the rollouts too?
+        while n_eps < n_rollouts:
             done = agent.act() 
             n_eps += done
-            #if done: print(f'COMPLETED ROLLOUT {n_eps}/{self.config.EVAL_N_ROLLOUTS}')
         # Get fitness score of individual (i.e. mean return)
         score = agent.avg_cum_reward
-        #scores = []
-        #for _ in range(self.config.EVAL_N_ROLLOUTS):
-        #    scores += [self._individual_rollout.remote(copy.deepcopy(agent))]
-        #scores = ray.get(scores)
-        # Get fitness score of individual (i.e. mean return)
-        #score = sum(scores)/len(scores)
         return score
+        
+# -------------------------------------------------------------------
+#   Callbacks
+# -------------------------------------------------------------------
 
-    #@staticmethod
-    #@ray.remote
-    #def _individual_rollout(agent: WorldModelGymAgent) -> float:
-    #    done = False
-    #    while not done:
-    #        done = agent.act()
-    #    return agent.avg_cum_reward
-
-# Callbacks
 class VnetMetricLoggerCallback(pl.Callback):
 
     """
@@ -340,10 +332,11 @@ class VnetMetricLoggerCallback(pl.Callback):
         pl_module.log('training_kld_loss', outputs['kld_loss'])
 
 
-    def on_validation_batch_end(self, trainer: pl.Trainer,
-                                pl_module: pl.LightningModule,
-                                outputs: torch.Tensor, batch: Any,
-                                batch_idx: int, dataloader_idx: int = 0) -> None:
+    def on_validation_batch_end(
+            self, trainer: pl.Trainer,
+            pl_module: pl.LightningModule,
+            outputs: torch.Tensor, batch: Any,
+            batch_idx: int, dataloader_idx: int = 0) -> None:
         # Log loss
         pl_module.log('validation_combined_loss', outputs['loss'])
         pl_module.log('validation_reconstruction_loss',
@@ -367,15 +360,22 @@ class VnetMetricLoggerCallback(pl.Callback):
 class MnetMetricLoggerCallback(pl.Callback):
 
     """
-    Simple callback to log training & validation losses for W&B.
+    Simple callback to log training & validation metrics for W&B.
+
+    Args:
+        vnet_decoder: vision network's decoder for
+            visualization of latent vectors.
     """
 
-    def __init__(self) -> None:
+    def __init__(self, vnet_decoder: torch.nn.Module = None) -> None:
         super().__init__()
+        self.vnet_decoder = vnet_decoder
 
     def on_fit_start(self, trainer: pl.Trainer,
                      pl_module: pl.LightningModule) -> None:
         pl_module.logger.watch(pl_module, log="all")
+        if self.vnet_decoder is not None:
+            self.vnet_decoder = self.vnet_decoder.to(pl_module.device)
 
     def on_train_batch_end(self, trainer: pl.Trainer,
                            pl_module: pl.LightningModule,
@@ -388,3 +388,22 @@ class MnetMetricLoggerCallback(pl.Callback):
                                 outputs: torch.Tensor, batch: Any,
                                 batch_idx: int, dataloader_idx: int = 0) -> None:
         pl_module.log('validation_loss', outputs['loss'])
+        if batch_idx == 0 and self.vnet_decoder is not None:
+            _, _, z_next = batch
+            pred_z_next = outputs['z_next_est_dist'].sample().float()
+            true_decoded = self.vnet_decoder(z_next[0,-1].unsqueeze(0))[0]
+            pred_decoded = self.vnet_decoder(pred_z_next[0,-1].unsqueeze(0))[0]
+            # Convert tensors to images
+            true_decoded = (true_decoded * 255.).to(
+                dtype=torch.uint8, device='cpu')
+            true_decoded = torchvision.transforms.functional.to_pil_image(
+                                                                true_decoded)
+            pred_decoded = (pred_decoded * 255.).to(
+                            dtype=torch.uint8, device='cpu')
+            pred_decoded = torchvision.transforms.functional.to_pil_image(
+                                                                pred_decoded)
+            # Log images
+            pl_module.logger.log_image(
+                key=(f"True Z_next vs. Predicted Z_next Image Comparison"),
+                images=[true_decoded, pred_decoded],
+                caption=["True", "Predicted"])
