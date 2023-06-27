@@ -3,19 +3,19 @@
 #####################################################################
 
 # (str) Identification of the experiments.
-EXPERIMENT_NAME: 'full-run-1'
+EXPERIMENT_NAME: ''
 
 # (str) Directory to save experiments result.
 EXPERIMENT_DIR: './experiments'
 
 # (str) The type of experiment to run (choices: 'V-Net', 'M-Net', 'C-Net')
-EXPERIMENT_TYPE: 'C-Net'
+EXPERIMENT_TYPE: 'V-Net'
 
 # (str) Name of environment (supported: "CarRacing-v2")
 ENV_NAME: "CarRacing-v2"
 
 # (str) Path to data .hdf5 file.
-DATA: '/world-models/data/full-dataset-v2_Z-distributions.hdf5'
+DATA: ''
 
 # (int) The number of samples in a batch to use for training.
 BATCH_SIZE: 128
@@ -32,7 +32,7 @@ TRAIN_VAL_SPLIT: 0.95
 CREATE_LATENT_DATASET: False
 
 # (int) The number of epochs/generations to optimize for.
-EPOCHS: 200
+EPOCHS: 1
 
 # (int) RNG seed.
 RNG_SEED: 314
@@ -59,13 +59,13 @@ N_GAUSSIANS: 5
 TEMP: 1.0
 
 # (str) Path to a vision network checkpoint file. Required for M-Net & C-Net training.
-VNET_CKPT: '/world-models/experiments/World-Models/xzpunxv9/checkpoints/epoch=000-validation_combined_loss=8.036e+01.ckpt'
+VNET_CKPT: ''
 
 # (str) Path to a memory network checkpoint file. Required for C-Net training.
-MNET_CKPT: '/world-models/experiments/World-Models/kfl69q0s/checkpoints/epoch=019-validation_loss=-2.404e+01.ckpt'
+MNET_CKPT: ''
 
 # (str) API key to Weights & Biases
-WANDB_KEY: '6d00b5ad6447d08639c076c90bccce5ab7191fa0'
+WANDB_KEY: ''
 
 #####################################################################
 #   C-Net Settings
@@ -74,17 +74,14 @@ WANDB_KEY: '6d00b5ad6447d08639c076c90bccce5ab7191fa0'
 # (int) The size of the population used for the evolution strategy.
 POP_SIZE: 64
 
-# (float) The percentage of top performers used to calculate the next generation sample space.
-TOP_PERCENTAGE: 0.25
-
 # (int) The number of rollouts to perform for evaluating an individual.
 EVAL_N_ROLLOUTS: 16
 
-# (int) Perform a test of the current best individual every N epochs.
-TEST_EVERY_N_EPOCHS: 25
+# (int) Perform a test of the current best individual every N generations.
+TEST_EVERY_N_GENERATIONS: 25
 
 # (int) The number of rollouts to perform when testing the current best individual.
-TEST_N_ROLLOUTS: 2
+TEST_N_ROLLOUTS: 4
 
 # (float) The initial value for sigma in CMS-ES
 INIT_SIGMA: 0.1
