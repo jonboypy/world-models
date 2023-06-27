@@ -105,7 +105,14 @@ class LitTrainer(Trainer):
                         mode='min',
                         save_last=True,
                         save_top_k=3)]
-                callbacks += [MnetMetricLoggerCallback()]
+                if hasattr(self.config, 'VNET_CKPT'):
+                    vnet_decoder = \
+                        VnetTrainingModule.load_from_checkpoint(
+                        self.config.VNET_CKPT, config=self.config).net.decoder
+                    vnet_decoder.eval()
+                    callbacks += [MnetMetricLoggerCallback(vnet_decoder)]
+                else:
+                    callbacks += [MnetMetricLoggerCallback()]
         return callbacks
 
     def _get_profiler(self) -> Any:
@@ -189,7 +196,6 @@ class EvolutionTrainer(Trainer):
                         'World-Models'/plugins[0].run.id/'checkpoints')
             self.config.EXPERIMENT_DIR = str(pathlib.Path(self.config.EXPERIMENT_DIR)/
                                             'World-Models'/plugins[0].run.id)
-
             plugins += [CNetModelCheckpoint(ckpt_dir)]
         return plugins
 
