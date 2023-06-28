@@ -3,10 +3,13 @@ from abc import ABC
 import argparse
 from pathlib import Path
 from tqdm import tqdm
+import torch
 from utils import MasterConfig
 from environments import GymEnvironment
 from plugins import DataRecorder
-from agents import RandomGymAgent
+from networks import Cnet
+from training_modules import VnetTrainingModule, MnetTrainingModule
+from agents import RandomGymAgent, WorldModelGymAgent
 
 # Runners
 class Runner(ABC):
@@ -24,7 +27,22 @@ class DataCollector(Runner):
         data_recorder = DataRecorder(data_dir, name, as_hdf5=True)
         plugins = [data_recorder]
         self.env = GymEnvironment(config, plugins)
-        self.agent = RandomGymAgent(self.env, plugins)
+        if config.DATA_COLLECTOR.AGENT == 'random':
+            self.agent = RandomGymAgent(self.env, plugins)
+        else:
+            vnet_encoder = VnetTrainingModule.load_from_checkpoint(
+                config.DATA_COLLECTOR.AGENT.VNET_CKPT,
+                config=config).net.encoder.cpu().eval()
+            mnet = MnetTrainingModule.load_from_checkpoint(
+                config.DATA_COLLECTOR.AGENT.MNET_CKPT,
+                config=config).net.cpu().eval()
+            cnet = Cnet(config)
+            st_dict = torch.load(
+                config.DATA_COLLECTOR.AGENT.CNET_CKPT)['model_state_dict']
+            cnet.load_state_dict(st_dict)
+            cnet.eval()
+            self.agent = WorldModelGymAgent(
+                self.env, vnet_encoder, mnet, cnet)
         self.steps = steps
 
     def execute(self) -> None:

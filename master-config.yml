@@ -2,6 +2,14 @@
 #   General Settings
 #####################################################################
 
+
+DATA_COLLECTOR:
+
+  AGENT:
+    VNET_CKPT: '/world-models/experiments/World-Models/xzpunxv9/checkpoints/epoch=000-validation_combined_loss=8.036e+01.ckpt' 
+    MNET_CKPT: '/world-models/experiments/World-Models/yfc0q2r4/checkpoints/epoch=019-validation_loss=-2.355e+01.ckpt'
+    CNET_CKPT: '/world-models/experiments/World-Models/3fm6gah3/checkpoints/generation=294-return=8.977e+02.ckpt'
+
 # (str) Identification of the experiments.
 EXPERIMENT_NAME: ''
 
