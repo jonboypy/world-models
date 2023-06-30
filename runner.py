@@ -97,14 +97,6 @@ class DataCollector(Runner):
         while not done:
             done = agent.act()
 
-    def __del__(self) -> None:
-        if (Path(self.cfg.SAVE_DIR)/
-            'tmp').exists():
-            shutil.rmtree(
-                Path(self.cfg.SAVE_DIR)/'tmp')
-            raise RuntimeError(
-                'Dataset failed to be generated.')
-
     def _load_agent(self, env: Environment,
                     plugins: List[Plugin]) -> Agent:
         if self.cfg.AGENT == 'random':
