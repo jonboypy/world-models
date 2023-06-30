@@ -1,7 +1,11 @@
-- Fix V-Net loss function
-
 - Write tests for trainer
 
-- Write C-Net trainer
+- Try data archiving/tables with WandB
 
-- Get WandB working
+- make temperature param functional
+
+- lint code
+
+- remove WANDB_KEY from git history
+
+- Make repo public
