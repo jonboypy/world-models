@@ -1,6 +1,7 @@
 # Imports
 from typing import Tuple
 import torch
+import numpy as np
 from utils import MasterConfig
 
 #####################################################################
@@ -244,14 +245,11 @@ class Mnet(Network):
             # Calculate mixing coefficients for each Gaussian
             pi = self.pi(x)
             # Apply softmax (so pi sums to 1)
-            pi = self.pi_softmax(pi)
-            #BUG: gumbel softmax goes to nan sometimes.
-            #pi = torch.nn.functional.gumbel_softmax(
-            #    pi, tau=self.cfg.TEMP, dim=-1) #TODO: is this right for temperature?
+            pi = self.pi_softmax(pi/self.cfg.TEMP)
             # Calculate mean vectors for each Gaussian
             mu = self.mu(x)
             # Calculate variance vectors for each Gaussian
-            sigma = torch.exp(self.sigma(x)) # exp to keep it positive
+            sigma = torch.exp(self.sigma(x))*np.sqrt(self.cfg.TEMP)
             # Reshape to (Seq, Batch, N Gaussians, N_z)
             mu = mu.view(*pi.size(), -1)
             sigma = sigma.view(*pi.size(), -1)
