@@ -1,10 +1,8 @@
-
-
 # Settings that are common among each step of training.
 COMMON:
 
   # (str) Identification of the experiments.
-  EXPERIMENT_NAME: 'V2-testing'
+  EXPERIMENT_NAME: 'run-1'
 
   # (str) Directory to save experiments result.
   EXPERIMENT_DIR: './experiments'
@@ -28,23 +26,25 @@ COMMON:
   N_GAUSSIANS: 5
 
   # (str) API key to Weights & Biases
-  WANDB_KEY: '6d00b5ad6447d08639c076c90bccce5ab7191fa0'
+  WANDB_KEY: ''
 
 # Settings for data collection.
 DATA_COLLECTION:
 
+  # Agent used for data collection (either 'random' or {VNET_CKPT:..., MNET_CKPT:..., CNET_CKPT:...})
   AGENT:
-    VNET_CKPT: '/world-models/experiments/World-Models/xzpunxv9/checkpoints/epoch=000-validation_combined_loss=8.036e+01.ckpt' 
-    MNET_CKPT: '/world-models/experiments/World-Models/yfc0q2r4/checkpoints/epoch=019-validation_loss=-2.355e+01.ckpt'
-    CNET_CKPT: '/world-models/experiments/World-Models/3fm6gah3/checkpoints/generation=294-return=8.977e+02.ckpt'
+    VNET_CKPT: '' 
+    MNET_CKPT: ''
+    CNET_CKPT: ''
 
+  # (str) Directory to save data in.
   SAVE_DIR: '/world-models/data/'
   
   # (int) The number of episodes to collect.
   N_EPISODES: 32
   
   # (str) The name given to the collected dataset.
-  DATA_NAME: 'baseline-agent-1'
+  DATA_NAME: 'dataset-1'
 
 # Settings for training the vision-network (VAE).
 V-NET:
@@ -59,7 +59,7 @@ V-NET:
   TRAIN_VAL_SPLIT: 0.95
 
   # (str) Path to data file (.HDF5).
-  DATA: '/world-models/data/baseline-agent-1.hdf5'
+  DATA: ''
 
   # (int) The number of processes to use for loading data.
   N_WORKERS: 8
@@ -86,12 +86,15 @@ M-NET:
   TRAIN_VAL_SPLIT: 0.95
 
   # (str) Path to data file (.HDF5).
-  DATA: '/world-models/data/baseline-agent-1.hdf5'
+  DATA: ''
 
   # (bool) When true, creates a latent encoding dataset.
   #       true -> Expects DATA to point to a image dataset for encoding.
   #       false -> Expects DATA to point to a latent dataset.
   CREATE_LATENT_DATASET: true 
+
+  # (str) Path to a vision network checkpoint file for creation of latent dataset.
+  VNET_CKPT: ''
 
   # (float) The learning rate of the optimizer.
   LR: 0.0001
@@ -105,26 +108,23 @@ M-NET:
   # (float) temperature parameter that controls the model uncertainty.
   TEMP: 1.0
 
-  # (str) Path to a vision network checkpoint file. Required for M-Net & C-Net training.
-  VNET_CKPT: '/world-models/experiments/World-Models/t2rsls1n/checkpoints/last.ckpt'
-
 # Settings for optimizing the controller-network (evolution-based).
 C-NET:
 
   # (int) The number of generations to optimize for.
-  GENERATIONS: 2
+  GENERATIONS: 400
 
   # (str) Path to a vision-network checkpoint file.
-  VNET_CKPT: '/world-models/experiments/World-Models/t2rsls1n/checkpoints/last.ckpt'
+  VNET_CKPT: ''
 
   # (str) Path to a memory-network checkpoint file.
-  MNET_CKPT: '/world-models/experiments/World-Models/q2z4kwxb/checkpoints/last.ckpt'
+  MNET_CKPT: ''
 
   # (int) The size of the population used for the evolution strategy.
-  POP_SIZE: 2
+  POP_SIZE: 64
 
   # (int) The number of rollouts to perform for evaluating an individual.
-  EVAL_N_ROLLOUTS: 2
+  EVAL_N_ROLLOUTS: 16
 
   # (int) Perform a test of the current best individual every N generations.
   TEST_EVERY_N_GENERATIONS: 25
