@@ -95,27 +95,27 @@ class MnetDataset(Dataset):
         # Index corresponds to episode number
         eps = idx
         # get data from dataset
-        mus = np.array(self._hf[str(eps)]['latent_means'])
-        sigmas = np.array(self._hf[str(eps)]['latent_stds'])
+        means = np.array(self._hf[str(eps)]['latent_means'])
+        logvars = np.array(self._hf[str(eps)]['latent_logvars'])
         actions = np.array(self._hf[str(eps)]['actions'])
         # preprocess data
-        (mus, sigmas, actions) = self.preprocess(mus, sigmas, actions)
+        (means, logvars, actions) = self.preprocess(means, logvars, actions)
         # sample latent vectors from distribution parameters
         #   *this helps prevent overfitting*
-        z_vecs = mus + torch.exp(sigmas * 0.5) * torch.randn_like(sigmas)
+        z_vecs = means + torch.exp(logvars * 0.5) * torch.randn_like(logvars)
         z_prev = z_vecs[:-1]
         a_prev = actions[:-1]
         z_next = z_vecs[1:]
         return z_prev, a_prev, z_next
 
     @classmethod
-    def preprocess(cls, mus: np.ndarray, sigmas: np.ndarray,
+    def preprocess(cls, means: np.ndarray, logvars: np.ndarray,
                    actions: np.ndarray) -> Tuple[torch.Tensor]:
         # convert all to torch tensors
-        mus = torch.tensor(mus, dtype=torch.float32)
-        sigmas = torch.tensor(sigmas, dtype=torch.float32)
+        means = torch.tensor(means, dtype=torch.float32)
+        logvars = torch.tensor(logvars, dtype=torch.float32)
         actions = torch.tensor(actions, dtype=torch.float32)
-        return mus, sigmas, actions
+        return means, logvars, actions
 
     def __del__(self) -> None:
         self._hf.close()
@@ -162,14 +162,14 @@ class MnetDataset(Dataset):
             obs = obs / 255.
             # permute dimensions to (N,C,H,W)
             obs = obs.permute(0,3,1,2)
-            # calculate mu & sigma from V-Net encoder
-            _, means, sigmas = vnet_encoder(obs)
+            # calculate mean & log-variance from V-Net encoder
+            _, means, logvars = vnet_encoder(obs)
             # convert to numpy arrays
             means = np.array(means.cpu(), dtype=np.float32)
-            sigmas = np.array(sigmas.cpu(), dtype=np.float32)
+            logvars = np.array(logvars.cpu(), dtype=np.float32)
             # add to HDF5
             group.create_dataset('latent_means', data=means)
-            group.create_dataset('latent_stds', data=sigmas)
+            group.create_dataset('latent_logvars', data=logvars)
             group.create_dataset('actions', data=ds['actions'])
         # close dataset with images
         self._hf.close()

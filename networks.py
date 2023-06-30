@@ -69,9 +69,9 @@ class Vnet(Network):
         self.decoder = self.Decoder(cfg)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        z, mu, sigma = self.encoder(x)
+        z, mean, logvar = self.encoder(x)
         y = self.decoder(z.clone())
-        return y, z, mu, sigma
+        return y, z, mean, logvar
 
     class Encoder(Network):
         """
@@ -90,10 +90,10 @@ class Vnet(Network):
             self.relu3 = torch.nn.ReLU(True)
             self.conv4 = torch.nn.Conv2d(128, 256, 4, 2)
             self.relu4 = torch.nn.ReLU(True)
-            self.mu_flatten = torch.nn.Flatten()
-            self.fv2mu = torch.nn.Linear(1024, N_z)
-            self.sigma_flatten = torch.nn.Flatten()
-            self.fv2sigma = torch.nn.Linear(1024, N_z)
+            self.mean_flatten = torch.nn.Flatten()
+            self.enc_2_mean = torch.nn.Linear(1024, N_z)
+            self.logvar_flatten = torch.nn.Flatten()
+            self.enc_2_logvar = torch.nn.Linear(1024, N_z)
 
         def forward(self, x: torch.Tensor) -> torch.Tensor:
             x = self.conv1(x)
@@ -104,14 +104,14 @@ class Vnet(Network):
             x = self.relu3(x)
             x = self.conv4(x)
             x = self.relu4(x)
-            fv = self.mu_flatten(x)
-            mu = self.fv2mu(fv)
-            fv = self.sigma_flatten(x)
-            sigma = self.fv2sigma(fv)
+            fv = self.mean_flatten(x)
+            mean = self.enc_2_mean(fv)
+            fv = self.logvar_flatten(x)
+            logvar = self.enc_2_logvar(fv)
             # reparameterization trick
-            std = torch.exp(sigma * 0.5)
-            z = mu + std * torch.randn_like(std)
-            return z, mu, sigma # sigma -> log-variance
+            std = torch.exp(logvar * 0.5)
+            z = mean + std * torch.randn_like(std)
+            return z, mean, logvar 
 
     class Decoder(Network):
         """
@@ -232,13 +232,13 @@ class Mnet(Network):
             N_h = cfg.HX_SIZE
             # Number of Gaussians in mixture
             N_g = cfg.N_GAUSSIANS
-            # Mixing coefficient for each Gaussian
+            # Input -> Mixing coefficient for each Gaussian
             self.pi = torch.nn.Linear(N_h, N_g)
             # Softmax for pi output so they add to 1
             self.pi_softmax = torch.nn.Softmax(-1)
-            # Mean vectors for each Gaussian
+            # Input -> Mean vectors for each Gaussian
             self.mu = torch.nn.Linear(N_h, N_g * N_z)
-            # Covariance matrix diagonal for each Gaussian
+            # Input -> Log-Variance for each Gaussian
             self.sigma = torch.nn.Linear(N_h, N_g * N_z)
 
         def forward(self, x: torch.Tensor) -> torch.Tensor:
@@ -247,17 +247,17 @@ class Mnet(Network):
             # Apply softmax (so pi sums to 1)
             pi = self.pi_softmax(pi/self.cfg.TEMP)
             # Calculate mean vectors for each Gaussian
-            mu = self.mu(x)
+            mean = self.mu(x)
             # Calculate variance vectors for each Gaussian
-            sigma = torch.exp(self.sigma(x))*np.sqrt(self.cfg.TEMP)
+            var = torch.exp(self.sigma(x))*np.sqrt(self.cfg.TEMP)
             # Reshape to (Seq, Batch, N Gaussians, N_z)
-            mu = mu.view(*pi.size(), -1)
-            sigma = sigma.view(*pi.size(), -1)
+            mean = mean.view(*pi.size(), -1)
+            var = var.view(*pi.size(), -1)
             # Create a categorical distribution with pi
             pi = torch.distributions.Categorical(pi)
             # Create independent multivariate Gaussian distribution
             gaussians = torch.distributions.Independent(
-                torch.distributions.Normal(mu, sigma), 1)
+                torch.distributions.Normal(mean, var), 1)
             # Create Gaussian mixture distribution
             mixture = torch.distributions.MixtureSameFamily(pi, gaussians)
             return mixture

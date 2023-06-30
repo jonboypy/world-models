@@ -67,15 +67,15 @@ class VnetTrainingModule(TrainingModule):
 
     def loss_function(self, original: torch.Tensor,
                       reconstructed: torch.Tensor,
-                      mu: torch.Tensor, sigma: torch.Tensor
+                      mean: torch.Tensor, logvar: torch.Tensor
                       ) -> torch.Tensor:
         # Image-Reconstruction loss
         reconstruction_loss = torch.nn.functional.mse_loss(
                     reconstructed, original, reduction='none')
         reconstruction_loss = reconstruction_loss.sum(dim=(1,2,3)).mean()
-        # KL-Divergence loss (sigma == log-variance)
+        # KL-Divergence loss
         kld_loss = -0.5 * torch.sum(
-            1 + sigma - mu.pow(2) - sigma.exp(),
+            1 + logvar - mean.pow(2) - logvar.exp(),
             dim = 1)
         kld_loss = kld_loss.clamp(self.cfg.KL_TOLERENCE * self.cfg.Z_SIZE)
         kld_loss = kld_loss.mean()
@@ -84,10 +84,10 @@ class VnetTrainingModule(TrainingModule):
 
     def training_step(self, batch: torch.Tensor,
                       batch_idx: int) -> torch.Tensor:
-        reconstructed, _, mu, sigma = self.net(batch)
+        reconstructed, _, mean, logvar = self.net(batch)
         (loss, reconstrution_loss,
          kld_loss) = self.loss_function(
-            batch, reconstructed, mu, sigma)
+            batch, reconstructed, mean, logvar)
         result = {'loss': loss,
                   'reconstruction_loss': reconstrution_loss,
                   'kld_loss': kld_loss}
@@ -95,10 +95,10 @@ class VnetTrainingModule(TrainingModule):
     
     def validation_step(self, batch: torch.Tensor,
                         batch_idx: int) -> torch.Tensor:
-        reconstructed, _, mu, sigma = self.net(batch)
+        reconstructed, _, mean, logvar = self.net(batch)
         (loss, reconstruction_loss,
          kld_loss) = self.loss_function(
-            batch, reconstructed, mu, sigma)
+            batch, reconstructed, mean, logvar)
         result = {'reconstructed': reconstructed,
                   'loss': loss,
                   'reconstruction_loss': reconstruction_loss,
