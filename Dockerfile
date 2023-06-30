@@ -1,7 +1,7 @@
 FROM rayproject/ray:2.4.0-py310-gpu
 
 # Install dependencies
-RUN pip install -U box2d-py flake8 torch torchvision pytorch-lightning h5py wandb gymnasium[box2d] moviepy cma
+RUN pip install -U box2d-py flake8 torch torchvision pytorch-lightning h5py wandb gymnasium[box2d] moviepy cma matplotlib
 
 # Misc.
 RUN echo 'export PS1="\[$(tput bold)\]\[\033[38;5;6m\]World-Models-Docker🐋\[$(tput sgr0)\]:\W\\$ \[$(tput sgr0)\]"' >> /home/ray/.bashrc
