@@ -77,6 +77,7 @@ class VnetTrainingModule(TrainingModule):
         kld_loss = -0.5 * torch.sum(
             1 + sigma - mu.pow(2) - sigma.exp(),
             dim = 1)
+        kld_loss = kld_loss.clamp(self.cfg.KL_TOLERENCE * self.cfg.Z_SIZE)
         kld_loss = kld_loss.mean()
         combined_loss = reconstruction_loss + kld_loss
         return combined_loss, reconstruction_loss, kld_loss
