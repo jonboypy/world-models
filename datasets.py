@@ -10,19 +10,22 @@ import h5py
 from utils import MasterConfig
 from training_modules import VnetTrainingModule
 
-# Datasets
+#####################################################################
+#   Datasets
+#####################################################################
+
 class Dataset(torch.utils.data.Dataset):
     """
     Base class which all other training
     datasets are derived from.
 
     Args:
-        config: A MasterConfig object.
+        cfg: A MasterConfig object.
     """
 
-    def __init__(self, config: MasterConfig) -> None:
+    def __init__(self, cfg: MasterConfig) -> None:
         super().__init__()
-        self.config = config
+        self.cfg = cfg
 
     @abstractmethod
     def __len__(self) -> int:
@@ -34,13 +37,13 @@ class Dataset(torch.utils.data.Dataset):
 
 class VnetDataset(Dataset):
 
-    def __init__(self, config: MasterConfig) -> None:
-        super().__init__(config)
+    def __init__(self, cfg: MasterConfig) -> None:
+        super().__init__(cfg)
         self._setup()
     
     def _setup(self) -> None:
         # load HDF5
-        self._hf = h5py.File(self.config.DATA, 'r')
+        self._hf = h5py.File(self.cfg.DATA, 'r')
         # calculate length of data and create LUT for indicies
         self._len = 0
         self._idx_dict = {} # {(start_idx, end_idx): episode #}
@@ -81,8 +84,8 @@ class VnetDataset(Dataset):
 
 class MnetDataset(Dataset):
     
-    def __init__(self, config: MasterConfig) -> None:
-        super().__init__(config)
+    def __init__(self, cfg: MasterConfig) -> None:
+        super().__init__(cfg)
         self._setup()
 
     def __len__(self) -> int:
@@ -119,18 +122,18 @@ class MnetDataset(Dataset):
 
     def _setup(self) -> None:
         # load HDF5
-        self._hf = h5py.File(self.config.DATA, 'r')
-        if self.config.CREATE_LATENT_DATASET:
+        self._hf = h5py.File(self.cfg.DATA, 'r')
+        if self.cfg.CREATE_LATENT_DATASET:
             # Load encoder
             #   if in 'test' mode, don't try to load a checkpoint
             if hasattr(self, 'UNITTEST'):
                 vnet_encoder = VnetTrainingModule(
-                                self.config).net.encoder
+                                self.cfg).net.encoder
             # else load encoder checkpoint
             else:
                 vnet_encoder = \
                     VnetTrainingModule.load_from_checkpoint(
-                    self.config.VNET_CKPT, config=self.config).net.encoder
+                    self.cfg.VNET_CKPT, cfg=self.cfg).net.encoder
             vnet_encoder.eval()
             # generate encoded dataset
             self._generate_encoded_dataset(vnet_encoder)
@@ -140,8 +143,8 @@ class MnetDataset(Dataset):
         # Get encoder network device
         device = next(vnet_encoder.parameters()).device
         # Create path & filename for dataset
-        z_hf_path = Path(self.config.DATA).parent / \
-            (str(Path(self.config.DATA).stem)
+        z_hf_path = Path(self.cfg.DATA).parent / \
+            (str(Path(self.cfg.DATA).stem)
                 + '_Z-distributions' + '.hdf5')
         if z_hf_path.exists():
             z_hf_path.unlink()
@@ -173,7 +176,10 @@ class MnetDataset(Dataset):
         # re-assign _hf to latent encodings dataset
         self._hf = z_hf
 
-# Data Module
+#####################################################################
+#   Data-Module
+#####################################################################
+
 class DataModule(pl.LightningDataModule):
 
     """
@@ -181,20 +187,20 @@ class DataModule(pl.LightningDataModule):
         for current training task.
     """
 
-    def __init__(self, config: MasterConfig):
+    def __init__(self, cfg: MasterConfig):
         super().__init__()
-        self.config = config
+        self.cfg = cfg
 
     def prepare_data(self) -> None:
         pass
         
     def setup(self, stage: Optional[str] = None) -> None:
         # Get correct dataset
-        exp_type = self.config.EXPERIMENT_TYPE
-        if exp_type == 'V-Net':
-            dataset = VnetDataset(self.config)
-        elif exp_type == 'M-Net':
-            dataset = MnetDataset(self.config)
+        exp_type = self.cfg.RUN_TYPE
+        if exp_type == 'V-NET':
+            dataset = VnetDataset(self.cfg)
+        elif exp_type == 'M-NET':
+            dataset = MnetDataset(self.cfg)
         else:
             raise SyntaxError
         # Split dataset
@@ -203,19 +209,19 @@ class DataModule(pl.LightningDataModule):
 
     def train_dataloader(self) -> torch.utils.data.DataLoader:
         return torch.utils.data.DataLoader(
-            self.train_ds, batch_size=self.config.BATCH_SIZE,
-            shuffle=True, num_workers=self.config.N_WORKERS)
+            self.train_ds, batch_size=self.cfg.BATCH_SIZE,
+            shuffle=True, num_workers=self.cfg.N_WORKERS)
 
     def val_dataloader(self) -> torch.utils.data.DataLoader:
         return torch.utils.data.DataLoader(
-            self.val_ds, batch_size=self.config.BATCH_SIZE,
-            shuffle=False, num_workers=self.config.N_WORKERS)
+            self.val_ds, batch_size=self.cfg.BATCH_SIZE,
+            shuffle=False, num_workers=self.cfg.N_WORKERS)
     
     def _train_val_split(self, dataset: torch.utils.data.Dataset
                          ) -> Tuple[torch.utils.data.Dataset]:
         generator = torch.Generator().manual_seed(
-                                self.config.RNG_SEED)
-        p = self.config.TRAIN_VAL_SPLIT
+                                self.cfg.RNG_SEED)
+        p = self.cfg.TRAIN_VAL_SPLIT
         train_ds, val_ds = torch.utils.data.random_split(
                                 dataset, [p, 1-p], generator)
         return train_ds, val_ds

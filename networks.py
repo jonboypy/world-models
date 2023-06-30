@@ -3,20 +3,22 @@ from typing import Tuple
 import torch
 from utils import MasterConfig
 
+#####################################################################
+#   Networks
+#####################################################################
 
-# Networks
 class Network(torch.nn.Module):
 
     """
     Base class which all other networks derived from.
 
     Args:
-        config: A MasterConfig object.
+        cfg: A MasterConfig object.
     """
 
-    def __init__(self, config: MasterConfig = None) -> None:
+    def __init__(self, cfg: MasterConfig = None) -> None:
         super().__init__()
-        self.config = config
+        self.cfg = cfg
 
     def initialize_parameters(self, init_type: str) -> None:
         """
@@ -58,12 +60,12 @@ class Vnet(Network):
     Is a VAE architecture mapping: image -> Z_t -> reconstructed image
     """
 
-    def __init__(self, config: MasterConfig) -> None:
-        super().__init__(config)
+    def __init__(self, cfg: MasterConfig) -> None:
+        super().__init__(cfg)
         # Create encoder instance
-        self.encoder = self.Encoder(config)
+        self.encoder = self.Encoder(cfg)
         # Create decoder instance
-        self.decoder = self.Decoder(config)
+        self.decoder = self.Decoder(cfg)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         z, mu, sigma = self.encoder(x)
@@ -74,10 +76,10 @@ class Vnet(Network):
         """
         Encoder for V network. Maps: Image -> Z_t
         """
-        def __init__(self, config: MasterConfig = None) -> None:
-            super().__init__(config)
+        def __init__(self, cfg: MasterConfig = None) -> None:
+            super().__init__(cfg)
             # Latent vector size
-            N_z = config.Z_SIZE
+            N_z = cfg.Z_SIZE
             # instantiate encoder layers
             self.conv1 = torch.nn.Conv2d(3, 32, 4, 2)
             self.relu1 = torch.nn.ReLU(True)
@@ -114,10 +116,10 @@ class Vnet(Network):
         """
         Decoder for V network. Maps: Z_t -> Image
         """
-        def __init__(self, config: MasterConfig = None) -> None:
-            super().__init__(config)
+        def __init__(self, cfg: MasterConfig = None) -> None:
+            super().__init__(cfg)
             # Latent vector size
-            N_z = config.Z_SIZE
+            N_z = cfg.Z_SIZE
             # instantiate Decoder layers
             self.linear1 = torch.nn.Linear(N_z, 1024)
             self.unflatten = torch.nn.Unflatten(-1, (1024, 1, 1))
@@ -143,19 +145,18 @@ class Vnet(Network):
             y = self.sigmoid1(x)
             return y
 
-
 class Mnet(Network):
     """
     M 'memory' network as described in https://arxiv.org/pdf/1809.01999.pdf
     Is a mixed-density RNN architecture mapping: Z_t, h_t, a_t -> P(Z_{t+1})
     """
 
-    def __init__(self, config: MasterConfig = None) -> None:
-        super().__init__(config)
+    def __init__(self, cfg: MasterConfig = None) -> None:
+        super().__init__(cfg)
         # Instantiate LSTM
-        self.lstm = self.LSTM(config)
+        self.lstm = self.LSTM(cfg)
         # Instantiate MDN
-        self.mdn = self.MDN(config)
+        self.mdn = self.MDN(cfg)
 
     def forward(self, z: torch.Tensor,
                 a_prev: torch.Tensor) -> Tuple[
@@ -192,14 +193,14 @@ class Mnet(Network):
         Long-Short-Term-Memory Network.
         """
 
-        def __init__(self, config: MasterConfig = None) -> None:
-            super().__init__(config)
+        def __init__(self, cfg: MasterConfig = None) -> None:
+            super().__init__(cfg)
             # Latent vector size
-            N_z = config.Z_SIZE
+            N_z = cfg.Z_SIZE
             # Hidden vector size
-            N_h = config.HX_SIZE
+            N_h = cfg.HX_SIZE
             # Action-space size
-            N_a = config.ACTION_SPACE_SIZE
+            N_a = cfg.ACTION_SPACE_SIZE
             # Create LSTM
             self.net = torch.nn.LSTM(N_z + N_a, N_h, batch_first=True)
 
@@ -222,14 +223,14 @@ class Mnet(Network):
         Note: Does not model covariances.
         """
 
-        def __init__(self, config: MasterConfig = None) -> None:
-            super().__init__(config)
+        def __init__(self, cfg: MasterConfig = None) -> None:
+            super().__init__(cfg)
             # Latent vector size
-            N_z = config.Z_SIZE
+            N_z = cfg.Z_SIZE
             # Hidden vector size
-            N_h = config.HX_SIZE
+            N_h = cfg.HX_SIZE
             # Number of Gaussians in mixture
-            N_g = config.N_GAUSSIANS
+            N_g = cfg.N_GAUSSIANS
             # Mixing coefficient for each Gaussian
             self.pi = torch.nn.Linear(N_h, N_g)
             # Softmax for pi output so they add to 1
@@ -246,7 +247,7 @@ class Mnet(Network):
             pi = self.pi_softmax(pi)
             #BUG: gumbel softmax goes to nan sometimes.
             #pi = torch.nn.functional.gumbel_softmax(
-            #    pi, tau=self.config.TEMP, dim=-1) #TODO: is this right for temperature?
+            #    pi, tau=self.cfg.TEMP, dim=-1) #TODO: is this right for temperature?
             # Calculate mean vectors for each Gaussian
             mu = self.mu(x)
             # Calculate variance vectors for each Gaussian
@@ -269,14 +270,14 @@ class Cnet(Network):
     Is a simple fully-connected network mapping: (Z_t, H_t) -> a_{t+1}
     """
 
-    def __init__(self, config: MasterConfig = None) -> None:
-        super().__init__(config)
+    def __init__(self, cfg: MasterConfig = None) -> None:
+        super().__init__(cfg)
         # Latent vector size
-        N_z = config.Z_SIZE
+        N_z = cfg.Z_SIZE
         # Hidden vector size
-        N_h = config.HX_SIZE
+        N_h = cfg.HX_SIZE
         # Action space size
-        N_a = config.ACTION_SPACE_SIZE
+        N_a = cfg.ACTION_SPACE_SIZE
         # Create Wx+b
         self.l1 = torch.nn.Linear(N_z + N_h, N_a)
         # turn off grads since we are doing
@@ -284,12 +285,12 @@ class Cnet(Network):
         self.l1.weight.requires_grad = False
         self.l1.bias.requires_grad = False
         # Create action-space scaling func. for output
-        if config.ENV_NAME == "CarRacing-v2":
+        if cfg.ENV_NAME == "CarRacing-v2":
             self.scale_2_action_space = \
                 self._2_car_racing_action_space
         else: raise NotImplementedError(
                 'Cnet does not currently support '
-                f'{config.ENV_NAME}')
+                f'{cfg.ENV_NAME}')
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         x = self.l1(x)

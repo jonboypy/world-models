@@ -1,95 +1,136 @@
-#####################################################################
-#   General Settings
-#####################################################################
 
 
-DATA_COLLECTOR:
+# Settings that are common among each step of training.
+COMMON:
+
+  # (str) Identification of the experiments.
+  EXPERIMENT_NAME: 'V2-testing'
+
+  # (str) Directory to save experiments result.
+  EXPERIMENT_DIR: './experiments'
+
+  # (str) Name of environment (supported: "CarRacing-v2")
+  ENV_NAME: "CarRacing-v2"
+
+  # (int) The size of the environment's action space.
+  ACTION_SPACE_SIZE: 3
+
+  # (int) Seed for random-number generators.
+  RNG_SEED: 314
+
+  # (int) The size of the latent vector Z.
+  Z_SIZE: 32
+
+  # (int) The size of the LSTM hidden vector.
+  HX_SIZE: 256
+
+  # (int) The number of Gaussians to model for mixture density network.
+  N_GAUSSIANS: 5
+
+  # (str) API key to Weights & Biases
+  WANDB_KEY: '6d00b5ad6447d08639c076c90bccce5ab7191fa0'
+
+# Settings for data collection.
+DATA_COLLECTION:
 
   AGENT:
     VNET_CKPT: '/world-models/experiments/World-Models/xzpunxv9/checkpoints/epoch=000-validation_combined_loss=8.036e+01.ckpt' 
     MNET_CKPT: '/world-models/experiments/World-Models/yfc0q2r4/checkpoints/epoch=019-validation_loss=-2.355e+01.ckpt'
     CNET_CKPT: '/world-models/experiments/World-Models/3fm6gah3/checkpoints/generation=294-return=8.977e+02.ckpt'
 
-# (str) Identification of the experiments.
-EXPERIMENT_NAME: ''
+  SAVE_DIR: '/world-models/data/'
+  
+  # (int) The number of episodes to collect.
+  N_EPISODES: 32
+  
+  # (str) The name given to the collected dataset.
+  DATA_NAME: 'baseline-agent-1'
 
-# (str) Directory to save experiments result.
-EXPERIMENT_DIR: './experiments'
+# Settings for training the vision-network (VAE).
+V-NET:
 
-# (str) The type of experiment to run (choices: 'V-Net', 'M-Net', 'C-Net')
-EXPERIMENT_TYPE: 'V-Net'
+  # (int) The number of samples in a batch to use for training.
+  BATCH_SIZE: 128
 
-# (str) Name of environment (supported: "CarRacing-v2")
-ENV_NAME: "CarRacing-v2"
+  # (int) The number of processes to use for loading data.
+  N_WORKERS: 8
 
-# (str) Path to data .hdf5 file.
-DATA: ''
+  # (float) The percentage of data used for training.
+  TRAIN_VAL_SPLIT: 0.95
 
-# (int) The number of samples in a batch to use for training.
-BATCH_SIZE: 128
+  # (str) Path to data file (.HDF5).
+  DATA: '/world-models/data/baseline-agent-1.hdf5'
 
-# (int) The number of processes to use for loading data.
-N_WORKERS: 8
+  # (int) The number of processes to use for loading data.
+  N_WORKERS: 8
 
-# (float) The percentage of data used for training.
-TRAIN_VAL_SPLIT: 0.95
+  # (float) The learning rate of the optimizer.
+  LR: 0.0001
 
-# (bool) When true, creates a latent encoding dataset.
-#       true -> Expects DATA to point to a image dataset for encoding.
-#       false -> Expects DATA to point to a latent dataset.
-CREATE_LATENT_DATASET: False
+  # (float) A value to clip gradients at
+  GRADIENT_CLIP: 5.0
 
-# (int) The number of epochs/generations to optimize for.
-EPOCHS: 1
+  # (int) The number of epochs to train for.
+  EPOCHS: 1
 
-# (int) RNG seed.
-RNG_SEED: 314
+# Settings for training the memory-network (LSTM + MDN).
+M-NET:
 
-# (float) The learning rate of the optimizer.
-LR: 0.0001
+  # (int) The number of samples in a batch to use for training.
+  BATCH_SIZE: 128
 
-# (float) A value to clip gradients at
-GRADIENT_CLIP: 1.0
+  # (int) The number of processes to use for loading data.
+  N_WORKERS: 8
 
-# (int) The size of the latent vector Z.
-Z_SIZE: 32
+  # (float) The percentage of data used for training.
+  TRAIN_VAL_SPLIT: 0.95
 
-# (int) The size of the LSTM hidden vector.
-HX_SIZE: 256
+  # (str) Path to data file (.HDF5).
+  DATA: '/world-models/data/baseline-agent-1.hdf5'
 
-# (int) The size of the action space.
-ACTION_SPACE_SIZE: 3
+  # (bool) When true, creates a latent encoding dataset.
+  #       true -> Expects DATA to point to a image dataset for encoding.
+  #       false -> Expects DATA to point to a latent dataset.
+  CREATE_LATENT_DATASET: true 
 
-# (int) The number of Gaussians to model for mixture density network.
-N_GAUSSIANS: 5
+  # (float) The learning rate of the optimizer.
+  LR: 0.0001
+  
+  # (float) A value to clip gradients at
+  GRADIENT_CLIP: 1.0
 
-# (float) temperature parameter that controls the model uncertainty.
-TEMP: 1.0
+  # (int) The number of epochs to train for.
+  EPOCHS: 20
 
-# (str) Path to a vision network checkpoint file. Required for M-Net & C-Net training.
-VNET_CKPT: ''
+  # (float) temperature parameter that controls the model uncertainty.
+  TEMP: 1.0
 
-# (str) Path to a memory network checkpoint file. Required for C-Net training.
-MNET_CKPT: ''
+  # (str) Path to a vision network checkpoint file. Required for M-Net & C-Net training.
+  VNET_CKPT: '/world-models/experiments/World-Models/t2rsls1n/checkpoints/last.ckpt'
 
-# (str) API key to Weights & Biases
-WANDB_KEY: ''
+# Settings for optimizing the controller-network (evolution-based).
+C-NET:
 
-#####################################################################
-#   C-Net Settings
-#####################################################################
+  # (int) The number of generations to optimize for.
+  GENERATIONS: 2
 
-# (int) The size of the population used for the evolution strategy.
-POP_SIZE: 64
+  # (str) Path to a vision-network checkpoint file.
+  VNET_CKPT: '/world-models/experiments/World-Models/t2rsls1n/checkpoints/last.ckpt'
 
-# (int) The number of rollouts to perform for evaluating an individual.
-EVAL_N_ROLLOUTS: 16
+  # (str) Path to a memory-network checkpoint file.
+  MNET_CKPT: '/world-models/experiments/World-Models/q2z4kwxb/checkpoints/last.ckpt'
 
-# (int) Perform a test of the current best individual every N generations.
-TEST_EVERY_N_GENERATIONS: 25
+  # (int) The size of the population used for the evolution strategy.
+  POP_SIZE: 2
 
-# (int) The number of rollouts to perform when testing the current best individual.
-TEST_N_ROLLOUTS: 4
+  # (int) The number of rollouts to perform for evaluating an individual.
+  EVAL_N_ROLLOUTS: 2
 
-# (float) The initial value for sigma in CMS-ES
-INIT_SIGMA: 0.1
+  # (int) Perform a test of the current best individual every N generations.
+  TEST_EVERY_N_GENERATIONS: 25
+
+  # (int) The number of rollouts to perform when testing the current best individual.
+  TEST_N_ROLLOUTS: 4
+
+  # (float) The initial value for sigma in CMS-ES
+  INIT_SIGMA: 0.1

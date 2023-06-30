@@ -1,4 +1,4 @@
-# ----------------------------- Imports ------------------------------
+# Imports
 from typing import Any, Tuple, List
 from abc import abstractmethod
 import torch
@@ -14,22 +14,22 @@ from environments import GymEnvironment
 from plugins import Plugin
 from agents import WorldModelGymAgent
 
-# -------------------------------------------------------------------
+##################################################################### 
 #   Training Modules
-# -------------------------------------------------------------------
+#####################################################################
 
 class TrainingModule(pl.LightningModule):
     """
     Base class which all other *Lightning* training modules derive from.
 
     Args:
-        config: Master config object.
+        cfg: Master cfg object.
     """
 
-    def __init__(self, config: MasterConfig) -> None:
+    def __init__(self, cfg: MasterConfig) -> None:
         super().__init__()
-        self.config = config
-        self.save_hyperparameters(self.config)
+        self.cfg = cfg
+        self.save_hyperparameters(self.cfg)
 
     @abstractmethod
     def configure_optimizers(self) -> torch.optim.Optimizer:
@@ -52,17 +52,17 @@ class VnetTrainingModule(TrainingModule):
     Training module for training the 'V' vision network.
 
     Args:
-        config: Master config object.
+        cfg: Master cfg object.
     """
 
-    def __init__(self, config: MasterConfig) -> None:
-        super().__init__(config)
-        self.net = Vnet(config)
+    def __init__(self, cfg: MasterConfig) -> None:
+        super().__init__(cfg)
+        self.net = Vnet(cfg)
         self.net.initialize_parameters('kaiming')
 
     def configure_optimizers(self) -> torch.optim.Optimizer:
         optim = torch.optim.Adam(self.net.parameters(),
-                                 lr=self.config.LR)
+                                 lr=self.cfg.LR)
         return optim
 
     def loss_function(self, original: torch.Tensor,
@@ -109,17 +109,17 @@ class MnetTrainingModule(TrainingModule):
     Training module for training the 'M' memory network.
 
     Args:
-        config: Master config object.
+        cfg: Master cfg object.
     """
     
-    def __init__(self, config: MasterConfig) -> None:
-        super().__init__(config)
-        self.net = Mnet(config)
+    def __init__(self, cfg: MasterConfig) -> None:
+        super().__init__(cfg)
+        self.net = Mnet(cfg)
         self.net.initialize_parameters('kaiming')
 
     def configure_optimizers(self) -> torch.optim.Optimizer:
         optim = torch.optim.Adam(self.net.parameters(),
-                                 lr=self.config.LR)
+                                 lr=self.cfg.LR)
         return optim
 
     def loss_function(self,
@@ -154,15 +154,15 @@ class CnetTrainingModule:
     'C' controller network.
 
     Args:
-        config: Master config object.
+        cfg: Master cfg object.
         plugins: Plugins to extend module's functions.
     """
 
-    def __init__(self, config: MasterConfig,
+    def __init__(self, cfg: MasterConfig,
                  plugins: List=None) -> None:
-        self.config = config
-        self.pop_size = config.POP_SIZE
-        self.generations = config.EPOCHS
+        self.cfg = cfg
+        self.pop_size = cfg.POP_SIZE
+        self.generations = cfg.GENERATIONS
         self.plugins = plugins
 
     @Plugin.hookable    
@@ -194,42 +194,42 @@ class CnetTrainingModule:
             self.log('Best Average Return', scores.max(), 'line', g)
             self.log('Worst Average Return', scores.min(), 'line', g)
             self.log('µ', self.alg.mean, 'histogram', g)
-            self.log('σ', self.alg.C, 'histogram', g)
+            self.log('σ', self.alg.C.diagonal().mean(), 'line', g)
             # checkpoint best model
             self.save(self._params2network(self.alg.result.xbest),
                 f'generation={g}-return={scores.max():.3e}.ckpt', scores.max())
             # Perform evaluation of top performer to log algorithm progress
-            if (g+1) % self.config.TEST_EVERY_N_GENERATIONS == 0:
+            if (g+1) % self.cfg.TEST_EVERY_N_GENERATIONS == 0:
                 training_module = ray.put(self)
                 video_name = f'Generation={g}-Return={scores.max():.3e}'
                 score = self._evaluate_individual.remote(
                     training_module,
                     self.alg.result.xbest,
-                    self.config.TEST_N_ROLLOUTS,
-                    (True if not self.config.DEBUG else False),
+                    self.cfg.TEST_N_ROLLOUTS,
+                    (True if not self.cfg.DEBUG else False),
                     video_name)
                 score = ray.get(score)
-                for i in range(self.config.TEST_N_ROLLOUTS):
+                for i in range(self.cfg.TEST_N_ROLLOUTS):
                     self.log(video_name + f'-episode-{i}', 
-                             self.config.EXPERIMENT_DIR + '/' + \
+                             self.cfg.EXPERIMENT_DIR + '/' + \
                                 video_name + f'-episode-{i}.mp4',
                              'video', g)
                 self.log('Test Average Return', score, 'line', g)
 
     def _load_modules(self) -> None:
-        self.cnet = Cnet(self.config)
+        self.cnet = Cnet(self.cfg)
         if hasattr(self, 'TEST'):
-            self.vnet_encoder = Vnet(self.config).encoder
-            self.mnet = Mnet(self.config)
+            self.vnet_encoder = Vnet(self.cfg).encoder
+            self.mnet = Mnet(self.cfg)
         else:
             self.vnet_encoder = VnetTrainingModule.\
                 load_from_checkpoint(
-                self.config.VNET_CKPT,
-                config = self.config).net.encoder
+                self.cfg.VNET_CKPT,
+                cfg = self.cfg).net.encoder
             self.mnet = MnetTrainingModule.\
                 load_from_checkpoint(
-                self.config.MNET_CKPT,
-                config = self.config).net
+                self.cfg.MNET_CKPT,
+                cfg = self.cfg).net
         self.vnet_encoder = self.vnet_encoder.eval().cpu()
         self.mnet = self.mnet.eval().cpu()
         for p in self.vnet_encoder.parameters():
@@ -246,8 +246,8 @@ class CnetTrainingModule:
         # Initialize algorithm
         self.alg = cma.CMAEvolutionStrategy(
             [0]*self.event_space,
-            self.config.INIT_SIGMA,
-            {'popsize': self.config.POP_SIZE}
+            self.cfg.INIT_SIGMA,
+            {'popsize': self.cfg.POP_SIZE}
         )
 
     def _evaluate_population(
@@ -259,14 +259,14 @@ class CnetTrainingModule:
             scores += [
                 self._evaluate_individual.remote(
                     training_module, population[idx],
-                    self.config.EVAL_N_ROLLOUTS)]
+                    self.cfg.EVAL_N_ROLLOUTS)]
         scores = ray.get(scores)
         return np.array(scores)
 
     def _params2network(
             self, params: np.ndarray) -> torch.nn.Module:
         # Load C-Net instance
-        cnet = Cnet(self.config)
+        cnet = Cnet(self.cfg)
         # Convert params to Torch tensor
         params = torch.from_numpy(params.copy()).float()
         # Reshape params to size of weight matrix (+1 for bias vector)
@@ -288,10 +288,10 @@ class CnetTrainingModule:
         # Make environment
         if record_video:
             env = GymEnvironment(
-                self.config, record_video=True,
+                self.cfg, record_video=True,
                 video_name=video_name)
         else:
-            env = GymEnvironment(self.config)
+            env = GymEnvironment(self.cfg)
         env.reset()
         # Make agent
         agent = WorldModelGymAgent(env, self.vnet_encoder,
@@ -305,9 +305,9 @@ class CnetTrainingModule:
         score = agent.avg_cum_reward
         return score
         
-# -------------------------------------------------------------------
+#####################################################################
 #   Callbacks
-# -------------------------------------------------------------------
+##################################################################### 
 
 class VnetMetricLoggerCallback(pl.Callback):
 

@@ -1,7 +1,6 @@
 # Imports
 from pathlib import Path
 from typing import Union, Dict, Any
-import shutil
 import functools
 from abc import ABC
 from PIL import Image
@@ -11,6 +10,9 @@ import h5py
 import wandb
 from utils import MasterConfig
 
+#####################################################################
+#   Plugins
+#####################################################################
 
 class Plugin(ABC):
     """
@@ -72,36 +74,24 @@ class Plugin(ABC):
             return output
         return hooked
 
-
 class DataRecorder(Plugin):
 
     """
-    Saves agent experiences to storage for training data.
+    Saves single episode of an agent's experiences for training data.
     Plugin must be given to both the environment and agent.
 
     Args:
         save_dir: Path to directory to save data to.
-        as_hdf5: If true, save dataset as HDF5.
     """
 
-    def __init__(self, save_dir: Path, name: str,
-                 as_hdf5: bool = False) -> None:
+    def __init__(self, save_dir: Path, name: str, eps_idx: int) -> None:
         super().__init__()
         self.save_dir = save_dir
-        if as_hdf5:
-            if (save_dir/f'{name}.hdf5').exists():
-                (save_dir/f'{name}.hdf5').unlink()
-        else:
-            if save_dir.exists():
-                shutil.rmtree(save_dir)
-                save_dir.mkdir(parents=True)
+        self.eps_idx = eps_idx
         self.eps = -1
         self.step = 0
         self.eps_data = {}
-        self.as_hdf5 = as_hdf5
-        if as_hdf5:
-            self.hf = h5py.File(save_dir / 
-                        f'{name}.hdf5', 'a') 
+        self.name = name
 
     def __del__(self) -> None:
         if self.eps_data:
@@ -111,55 +101,40 @@ class DataRecorder(Plugin):
     def pre_policy(self, state: np.ndarray) -> None:
         self.eps_data[self.step] = state
 
-    def post_policy(self, output: Any) -> None:
+    def post_policy(self, action: np.ndarray) -> None:
         self.eps_data[self.step] = (
             self.eps_data[self.step],
-            output)
+            action)
 
-    def post_step(self, output: Any) -> None:
+    def post_step(self, *args, **kwargs) -> None:
         self.step += 1
 
-    def post_reset(self, output: Any) -> Any:
+    def post_reset(self, *args, **kwargs) -> Any:
         if not self.eps < 0:
             self._save_episode_data()
         self.eps += 1
         self.eps_data = {}
         self.step = 0
-        return output
 
     def _save_episode_data(self) -> None:
-        if self.as_hdf5:
-            self._save_episode_data_hdf5()
-        else:
-            (self.save_dir / f'episode-{self.eps}').mkdir(
-                                parents=True, exist_ok=True)
-            eps_dir = self.save_dir / f'episode-{self.eps}'
-            actions = []
-            for step, data in self.eps_data.items():
-                obs, action = data
-                actions.append(action)
-                img = self._preprocess(obs)
-                step = str(step).zfill(len(str(self.step)))
-                img.save(eps_dir / f'step-{step}.png')
-            actions = np.array(actions)
-            np.save(eps_dir / 'actions', actions)
-
-    def _save_episode_data_hdf5(self) -> None:
-        group = self.hf.create_group(str(self.eps))
+        self.hf = h5py.File(
+            self.save_dir/f'{self.name}-eps={self.eps_idx}.hdf5', 'a') 
+        group = self.hf.create_group(str(self.eps_idx))
         imgs = []
         actions = []
-        for _, data in self.eps_data.items():
+        for data in self.eps_data.values():
             obs, action = data
-            img = self._preprocess(obs)
+            img = self._preprocess_observation(obs)
             img = np.array(img, dtype=np.uint8)
             imgs.append(img)
             actions.append(action)
         imgs = np.array(imgs)
         actions = np.array(actions)
-        _ = group.create_dataset('observations', data=imgs)
-        _ = group.create_dataset('actions', data=actions)
+        group.create_dataset('observations', data=imgs)
+        group.create_dataset('actions', data=actions)
+        self.hf.close()
 
-    def _preprocess(self, obs: np.ndarray) -> Image.Image:
+    def _preprocess_observation(self, obs: np.ndarray) -> Image.Image:
         img = Image.fromarray(obs)
         img = img.crop((0,0,96,83))
         img = img.resize((64, 64))
@@ -171,14 +146,14 @@ class CNetWandbLogger(Plugin):
     Plugin to log C-Net training metrics to WandB.
     """
 
-    def __init__(self, config: MasterConfig) -> None:
+    def __init__(self, cfg: MasterConfig) -> None:
         super().__init__()
         self.run = wandb.init(
             project="World-Models",
-            config=config,
-            dir=config.EXPERIMENT_DIR,
-            name=(f'{config.EXPERIMENT_TYPE}/'
-                  f'{config.EXPERIMENT_NAME}')
+            config=cfg,
+            dir=cfg.EXPERIMENT_DIR,
+            name=(f'{cfg.RUN_TYPE}/'
+                  f'{cfg.EXPERIMENT_NAME}')
             )
 
     def pre_log(self, name: str, metric: Any,

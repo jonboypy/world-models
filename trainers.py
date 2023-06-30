@@ -1,11 +1,9 @@
 # Imports
 import pathlib
-import argparse
 from abc import ABC, abstractmethod
 from typing import Any, List
 import torch
 import pytorch_lightning as pl
-import wandb
 import ray
 from utils import MasterConfig
 from plugins import Plugin, CNetModelCheckpoint, CNetWandbLogger
@@ -15,19 +13,22 @@ from training_modules import (
     MnetMetricLoggerCallback)
 from datasets import DataModule
 
-# Trainers
+#####################################################################
+#   Trainers
+#####################################################################
+
 class Trainer(ABC):
 
     """
         Base class which all other trainers derive from.
 
         Args:
-            config: MasterConfig object.
+            cfg: MasterConfig object.
     """
 
-    def __init__(self, config: MasterConfig) -> None:
+    def __init__(self, cfg: MasterConfig) -> None:
         super().__init__()
-        self.config = config
+        self.cfg = cfg
 
     @abstractmethod
     def setup(self) -> None:
@@ -46,10 +47,13 @@ class LitTrainer(Trainer):
     """
         Trainer for PyTorch-Lightning
         training-modules (i.e. V-Net/M-Net).
+    
+        Args:
+            cfg: Master configuration object.
     """
 
-    def __init__(self, config: MasterConfig) -> None:
-        super().__init__(config)
+    def __init__(self, cfg: MasterConfig) -> None:
+        super().__init__(cfg)
         self._is_setup = False
 
     def setup(self) -> None:
@@ -64,7 +68,7 @@ class LitTrainer(Trainer):
     def train(self) -> None:
         assert self._is_setup, (
             f'Trainer isnt setup! Call .setup()')
-        if not self.config.EXPERIMENT_TYPE == 'M-Net' and not args.debug: #BUG
+        if not self.cfg.RUN_TYPE == 'M-NET' and not self.cfg.DEBUG: #BUG: M-Net won't compile
             self._training_module = torch.compile(self._training_module)
         self._lit_trainer.fit(self._training_module,
                               self._data_module)
@@ -75,12 +79,12 @@ class LitTrainer(Trainer):
 
     def _get_loggers(self):
         loggers = []
-        if not self.config.DEBUG:
+        if not self.cfg.DEBUG:
             loggers += [pl.loggers.WandbLogger(
                         project='World-Models',
-                        save_dir=self.config.EXPERIMENT_DIR,
-                        name=(f'{self.config.EXPERIMENT_TYPE}/'
-                              f'{self.config.EXPERIMENT_NAME}'),
+                        save_dir=self.cfg.EXPERIMENT_DIR,
+                        name=(f'{self.cfg.RUN_TYPE}/'
+                              f'{self.cfg.EXPERIMENT_NAME}'),
                         log_model='all')]
             self.exp_dir = (pathlib.Path(loggers[0].save_dir) /
                             loggers[0].name /
@@ -89,8 +93,8 @@ class LitTrainer(Trainer):
 
     def _get_callbacks(self) -> List[pl.Callback]:
         callbacks = []
-        if not self.config.DEBUG:
-            if self.config.EXPERIMENT_TYPE == 'V-Net':
+        if not self.cfg.DEBUG:
+            if self.cfg.RUN_TYPE == 'V-NET':
                 callbacks += [pl.callbacks.ModelCheckpoint(
                         monitor='validation_combined_loss',
                         filename='{epoch:03d}-{validation_combined_loss:.3e}',
@@ -98,17 +102,17 @@ class LitTrainer(Trainer):
                         save_last=True,
                         save_top_k=3)]
                 callbacks += [VnetMetricLoggerCallback()]
-            elif self.config.EXPERIMENT_TYPE == 'M-Net':
+            elif self.cfg.RUN_TYPE == 'M-NET':
                 callbacks += [pl.callbacks.ModelCheckpoint(
                         monitor='validation_loss',
                         filename='{epoch:03d}-{validation_loss:.3e}',
                         mode='min',
                         save_last=True,
                         save_top_k=3)]
-                if hasattr(self.config, 'VNET_CKPT'):
+                if hasattr(self.cfg, 'VNET_CKPT'):
                     vnet_decoder = \
                         VnetTrainingModule.load_from_checkpoint(
-                        self.config.VNET_CKPT, config=self.config).net.decoder
+                        self.cfg.VNET_CKPT, cfg=self.cfg).net.decoder
                     vnet_decoder.eval()
                     callbacks += [MnetMetricLoggerCallback(vnet_decoder)]
                 else:
@@ -119,51 +123,51 @@ class LitTrainer(Trainer):
         return None
 
     def _get_data_module(self) -> pl.LightningDataModule:
-        datamodule = DataModule(self.config)
+        datamodule = DataModule(self.cfg)
         return datamodule
 
     def _get_training_module(self) -> pl.LightningModule:
-        if self.config.EXPERIMENT_TYPE == 'V-Net':
-            return VnetTrainingModule(self.config)
-        elif self.config.EXPERIMENT_TYPE == 'M-Net':
-            return MnetTrainingModule(self.config)
+        if self.cfg.RUN_TYPE == 'V-NET':
+            return VnetTrainingModule(self.cfg)
+        elif self.cfg.RUN_TYPE == 'M-NET':
+            return MnetTrainingModule(self.cfg)
         else:
             raise SyntaxError(
-                ('Experiment type '
-                 f'{self.config.EXPERIMENT_TYPE} '
+                ('Network type '
+                 f'{self.cfg.RUN_TYPE} '
                  'not supported.'))
     
     def _get_lit_trainer(self) -> pl.Trainer:
-        if self.config.EXPERIMENT_TYPE == 'V-Net':
-            return pl.Trainer(max_epochs=self.config.EPOCHS,
+        if self.cfg.RUN_TYPE == 'V-NET':
+            return pl.Trainer(max_epochs=self.cfg.EPOCHS,
                               precision=16,
                               logger=self._loggers,
                               callbacks=self._callbacks,
                               profiler=self._profiler,
-                              fast_dev_run=self.config.DEBUG,
+                              fast_dev_run=self.cfg.DEBUG,
                               benchmark=True,
                               num_sanity_val_steps=0,
                               gradient_clip_algorithm=(
-                                'value' if self.config.GRADIENT_CLIP else None),
-                              gradient_clip_val=self.config.GRADIENT_CLIP,
+                                'value' if self.cfg.GRADIENT_CLIP else None),
+                              gradient_clip_val=self.cfg.GRADIENT_CLIP,
                               val_check_interval=(0.1))
-        elif self.config.EXPERIMENT_TYPE == 'M-Net':
-            return pl.Trainer(max_epochs=self.config.EPOCHS,
+        elif self.cfg.RUN_TYPE == 'M-NET':
+            return pl.Trainer(max_epochs=self.cfg.EPOCHS,
                               precision=16,
                               logger=self._loggers,
                               callbacks=self._callbacks,
                               profiler=self._profiler,
-                              fast_dev_run=self.config.DEBUG,
+                              fast_dev_run=self.cfg.DEBUG,
                               benchmark=True,
                               gradient_clip_algorithm=(
-                                'value' if self.config.GRADIENT_CLIP else None),
-                              gradient_clip_val=self.config.GRADIENT_CLIP,
+                                'value' if self.cfg.GRADIENT_CLIP else None),
+                              gradient_clip_val=self.cfg.GRADIENT_CLIP,
                               num_sanity_val_steps=0)
 
 class EvolutionTrainer(Trainer):
 
-    def __init__(self, config: MasterConfig) -> None:
-        super().__init__(config)
+    def __init__(self, cfg: MasterConfig) -> None:
+        super().__init__(cfg)
         self._is_setup = False
 
     def setup(self) -> None:
@@ -180,62 +184,17 @@ class EvolutionTrainer(Trainer):
         return super().test()
 
     def _get_training_module(self) -> CnetTrainingModule:
-        if args.debug:
-            ray.init(local_mode=True)
-        else:
-            ray.init()
-        return CnetTrainingModule(self.config, self._plugins)
+        return CnetTrainingModule(self.cfg, self._plugins)
 
     def _get_plugins(self) -> List[Plugin]:
         plugins = []
-        if not args.debug:
+        if not self.cfg.DEBUG:
             # Logger
-            plugins += [CNetWandbLogger(self.config)]
+            plugins += [CNetWandbLogger(self.cfg)]
             # Checkpointing
-            ckpt_dir = (pathlib.Path(self.config.EXPERIMENT_DIR)/
+            ckpt_dir = (pathlib.Path(self.cfg.EXPERIMENT_DIR)/
                         'World-Models'/plugins[0].run.id/'checkpoints')
-            self.config.EXPERIMENT_DIR = str(pathlib.Path(self.config.EXPERIMENT_DIR)/
+            self.cfg.EXPERIMENT_DIR = str(pathlib.Path(self.cfg.EXPERIMENT_DIR)/
                                             'World-Models'/plugins[0].run.id)
             plugins += [CNetModelCheckpoint(ckpt_dir)]
         return plugins
-
-
-# CLI
-parser = argparse.ArgumentParser(description='Runs training of networks.')
-parser.add_argument('--config', help='Path to .yaml configuration file.',
-                    default='./master-config.yml')
-parser.add_argument('--debug', action='store_true',
-                    help='Run trainer in debug-mode')
-args = parser.parse_args()
-
-def main() -> None:
-    # Create config object
-    config = MasterConfig.from_yaml(args.config)
-    # Set debugging options
-    if args.debug:
-        config.DEBUG = True
-    else:
-        config.DEBUG = False
-    # Create experiment directory
-    if (not config.DEBUG and not pathlib.Path(
-            config.EXPERIMENT_DIR).exists()):
-        pathlib.Path(config.EXPERIMENT_DIR).mkdir(parents=True)
-    # login to WandB
-    if not config.DEBUG:
-        wandb.login(key=config.WANDB_KEY)
-        del config.WANDB_KEY
-    # Create trainer
-    if any(t == config.EXPERIMENT_TYPE for t in ('V-Net', 'M-Net')):
-       trainer = LitTrainer(config)
-    elif config.EXPERIMENT_TYPE == 'C-Net':
-        trainer = EvolutionTrainer(config)
-    else:
-        raise SyntaxError('Experiment type '
-                          f'{config.EXPERIMENT_TYPE} not supported.')
-    # Setup
-    trainer.setup()
-    # Train!
-    trainer.train()
-
-if __name__ == '__main__':
-    main()

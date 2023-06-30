@@ -24,25 +24,27 @@ class Agent(ABC):
         self.plugins = plugins
         self.eps_cum_reward = 0.
         self.avg_cum_reward = 0.
+        self.eps_steps = 0
         self.state, _ = self.env.reset()
 
     def act(self) -> np.ndarray:
         action = self.policy(self.state)
         obs, reward, term, trunc, _ = self.env.step(action)
+        self.eps_steps += 1
         self.state = obs
         self.eps_cum_reward += reward
-        done = max(term, trunc)
+        done = (self.eps_steps == 1000)
         if done:
             self.state, _ = self.env.reset()
             self.avg_cum_reward = (self.avg_cum_reward +
                                    self.eps_cum_reward) / 2
             self.eps_cum_reward = 0.
+            self.eps_steps = 0
         return done
 
     @abstractmethod
     def policy(self, state: np.ndarray) -> np.ndarray:
         raise NotImplementedError()
-
 
 class RandomGymAgent(Agent):
     """
@@ -89,13 +91,13 @@ class WorldModelGymAgent(Agent):
         assert(self.world_model_device ==
             next(mnet.parameters()).device)
         # Create initial hidden vector
-        self.hx = (torch.zeros(1, 1, self.mnet.config.HX_SIZE,
+        self.hx = (torch.zeros(1, 1, self.mnet.cfg.HX_SIZE,
                                device=self.world_model_device),
-                    torch.zeros(1, 1, self.mnet.config.HX_SIZE,
+                    torch.zeros(1, 1, self.mnet.cfg.HX_SIZE,
                                 device=self.world_model_device))
         # Create initial previous action
         self.a_prev = torch.zeros(
-            1, 1, self.mnet.config.ACTION_SPACE_SIZE,
+            1, 1, self.mnet.cfg.ACTION_SPACE_SIZE,
             device=self.world_model_device)
     
     @torch.no_grad()
