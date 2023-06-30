@@ -38,7 +38,7 @@ DATA_COLLECTION:
     CNET_CKPT: ''
 
   # (str) Directory to save data in.
-  SAVE_DIR: '/world-models/data/'
+  SAVE_DIR: ''
   
   # (int) The number of episodes to collect.
   N_EPISODES: 32
