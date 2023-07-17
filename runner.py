@@ -100,7 +100,7 @@ class DataCollector(Runner):
     def _load_agent(self, env: Environment,
                     plugins: List[Plugin]) -> Agent:
         if self.cfg.AGENT == 'random':
-            agent = RandomGymAgent(env, plugins)
+            agent = RandomGymAgent(env, plugins, force_full_episode = True)
         else:
             vnet_encoder = VnetTrainingModule.load_from_checkpoint(
                 self.cfg.AGENT.VNET_CKPT,
@@ -114,7 +114,8 @@ class DataCollector(Runner):
             cnet.load_state_dict(st_dict)
             cnet = cnet.cpu().eval()
             agent = WorldModelGymAgent(
-                env, vnet_encoder, mnet, cnet, plugins)
+                env, vnet_encoder, mnet, cnet,
+                plugins, force_full_episode = True)
         return agent
 
 class AgentTester(Runner):

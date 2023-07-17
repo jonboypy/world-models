@@ -18,7 +18,8 @@ class Agent(ABC):
     """
 
     def __init__(self, env: Environment,
-                 plugins: List[Plugin] = None) -> None:
+                 plugins: List[Plugin] = None,
+                 force_full_episode: bool = False) -> None:
         super().__init__()
         self.env = env
         self.plugins = plugins
@@ -26,6 +27,7 @@ class Agent(ABC):
         self.avg_cum_reward = 0.
         self.eps_steps = 0
         self.state, _ = self.env.reset()
+        self.force_full_episode = force_full_episode
 
     def act(self) -> np.ndarray:
         action = self.policy(self.state)
@@ -33,7 +35,10 @@ class Agent(ABC):
         self.eps_steps += 1
         self.state = obs
         self.eps_cum_reward += reward
-        done = (self.eps_steps == 1000)
+        if self.force_full_episode:
+            done = (self.eps_steps == 1000)
+        else:
+            done = max(term, trunc)
         if done:
             self.state, _ = self.env.reset()
             self.avg_cum_reward = (self.avg_cum_reward +
@@ -53,8 +58,9 @@ class RandomGymAgent(Agent):
     """
 
     def __init__(self, env: Environment,
-                 plugins: List[Plugin] = None) -> None:
-        super().__init__(env, plugins)
+                 plugins: List[Plugin] = None,
+                 force_full_episode: bool = False) -> None:
+        super().__init__(env, plugins, force_full_episode)
 
     @Plugin.hookable
     def policy(self, state: np.ndarray) -> np.ndarray:
@@ -76,8 +82,9 @@ class WorldModelGymAgent(Agent):
                  vnet_encoder: torch.nn.Module,
                  mnet: torch.nn.Module,
                  cnet: torch.nn.Module,
-                 plugins: List[Plugin] = None) -> None:
-        super().__init__(env, plugins)
+                 plugins: List[Plugin] = None,
+                 force_full_episode: bool = False) -> None:
+        super().__init__(env, plugins, force_full_episode)
         self.vnet_encoder = vnet_encoder
         self.mnet = mnet
         self.cnet = cnet
