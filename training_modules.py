@@ -395,12 +395,8 @@ class MnetMetricLoggerCallback(pl.Callback):
             true_decoded = self.vnet_decoder(z_next[0,-1].unsqueeze(0))[0]
             pred_decoded = self.vnet_decoder(pred_z_next[0,-1].unsqueeze(0))[0]
             # Convert tensors to images
-            true_decoded = (true_decoded * 255.).to(
-                dtype=torch.uint8, device='cpu')
             true_decoded = torchvision.transforms.functional.to_pil_image(
                                                                 true_decoded)
-            pred_decoded = (pred_decoded * 255.).to(
-                            dtype=torch.uint8, device='cpu')
             pred_decoded = torchvision.transforms.functional.to_pil_image(
                                                                 pred_decoded)
             # Log images

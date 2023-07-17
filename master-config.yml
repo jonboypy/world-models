@@ -41,7 +41,7 @@ DATA_COLLECTION:
   SAVE_DIR: ''
   
   # (int) The number of episodes to collect.
-  N_EPISODES: 32
+  N_EPISODES: 10000
   
   # (str) The name given to the collected dataset.
   DATA_NAME: 'dataset-1'
@@ -56,13 +56,10 @@ V-NET:
   N_WORKERS: 8
 
   # (float) The percentage of data used for training.
-  TRAIN_VAL_SPLIT: 0.95
+  TRAIN_VAL_SPLIT: 0.999999
 
   # (str) Path to data file (.HDF5).
   DATA: ''
-
-  # (int) The number of processes to use for loading data.
-  N_WORKERS: 8
 
   # (float) The learning rate of the optimizer.
   LR: 0.0001
@@ -72,6 +69,9 @@ V-NET:
 
   # (int) The number of epochs to train for.
   EPOCHS: 1
+
+  # (float) tolerence of the KLD loss
+  KL_TOLERENCE: 0.5
 
 # Settings for training the memory-network (LSTM + MDN).
 M-NET:
@@ -112,7 +112,7 @@ M-NET:
 C-NET:
 
   # (int) The number of generations to optimize for.
-  GENERATIONS: 400
+  GENERATIONS: 800
 
   # (str) Path to a vision-network checkpoint file.
   VNET_CKPT: ''
@@ -134,3 +134,6 @@ C-NET:
 
   # (float) The initial value for sigma in CMS-ES
   INIT_SIGMA: 0.1
+
+  # (float) temperature parameter that controls model uncertainty.
+  TEMP: 1.0
